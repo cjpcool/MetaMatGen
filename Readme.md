@@ -1,5 +1,7 @@
 # Readme
 
+Code based on SyMat (https://github.com/divelab/AIRS/tree/main/OpenMat/SyMat).
+
 Supported data: LatticeStiffness
 
 
