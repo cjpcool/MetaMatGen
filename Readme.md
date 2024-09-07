@@ -1,9 +1,15 @@
 # Readme
 
-Code based on SyMat (https://github.com/divelab/AIRS/tree/main/OpenMat/SyMat).
+To use dataset LatticeModulus, please unzip LatticeModulus.zip to [PATH\LatticeModulus], and load dataset by running:
+~~~python
+dataset = LatticeModulus('[your unzip path]\LatticeModulus', file_name='data')
+~~~
 
-Supported data: LatticeStiffness
-
+To use dataset LatticeStiffness, please run:
+~~~python
+dataset = LatticeStiffness('[your path]\LatticeStiffness', file_name='training')
+~~~
+The dataset will be downloaded and processed automatically.
 
 
 Training data:
