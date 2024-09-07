@@ -76,22 +76,28 @@ class LatticeModulus(InMemoryDataset):
         print('Processing data...')
         with open(self.raw_paths[0], mode='rb') as f:
             raw_data = pickle.load(f)
-
+        
         data_list = []
         #['Name', 'Other name(s)', 'lengths', 'angles', 'Z_avg', 'Young', 'Shear', 'Poisson', 'Emax',
-         # 'Scaling constants', 'Scaling exponents', 'has overlapping bars', 'Nodal positions', 'Edge index']
+        # 'Scaling constants', 'Scaling exponents', 'has overlapping bars', 'Nodal positions', 'Edge index']
         for i in tqdm(range(len(raw_data))):
             exported_lattice = raw_data[i]
             try:
                 properties = torch.FloatTensor(exported_lattice['Young']+exported_lattice['Shear']+exported_lattice['Poisson'])
+                lattice_param = torch.FloatTensor([exported_lattice['lengths'],exported_lattice['angles']])
+                frac_coords = torch.FloatTensor(exported_lattice['Nodal positions']).squeeze(1) - torch.tensor([0.5,0.5,0.5])
+                cart_coords = Structure.frac_to_cart_coords(frac_coords, lattice_param[0], lattice_param[1], frac_coords.shape[0])
+                edge_index = torch.LongTensor(exported_lattice['Edge index']).squeeze(1)
+                # "tol" control the radius: If the nodes' distance is smaller than this radius, then only one of them remains.
+                edge_index, cart_coords = Structure.remove_overlapping_nodes(edge_index.numpy(), cart_coords.numpy(), tol=1e-4)
 
-                S1 = Structure(torch.FloatTensor([exported_lattice['lengths'],exported_lattice['angles']]),
-                               torch.LongTensor(exported_lattice['Edge index']).squeeze(1),
-                               torch.FloatTensor(exported_lattice['Nodal positions']).squeeze(1), is_cartesian=False,
+                S1 = Structure(lattice_param,
+                               edge_index,
+                               cart_coords, is_cartesian=True,
                                properties=properties,
                                properties_names=self.properties_names)
-            except KeyError:
-                print('Error sample {}, skip it.'.format(i))
+            except KeyError as e:
+                print('Error sample {}, skip it.'.format(i), e)
                 continue
             edge_num = S1.edge_index.shape[1].item()
             node_feat = torch.zeros((S1.num_nodes, 1), dtype=torch.long)
@@ -194,21 +200,40 @@ class LatticeStiffness(InMemoryDataset):
         df = pd.read_csv(self.raw_paths[0])
         print(len(df))
         data_list = []
-
+        
+        ignored_num = 0
         for i in tqdm(range(len(df))):
-        # for i in tqdm(range(10000)):
             dfi = df.iloc[i]
             exported_lattice = Topology(dfi)
-            S1 = Structure(torch.from_numpy(exported_lattice.lattice_vector),
+
+            coords = torch.from_numpy(exported_lattice.coordinates)
+            lattice_vector = torch.from_numpy(exported_lattice.lattice_vector)
+            lengths, angles = Structure.lattice_vector_to_parameters(lattice_vector)
+
+            frac_coords = Structure.cart_to_frac_coords(coords, lengths, angles, coords.shape[0])
+        
+            if frac_coords.max() > 0.5 or frac_coords.min() < -0.5: # if lattice exceeds the unit cell
+                ## if you want to remove these data. However, almost all data has the problem.
+                # ignored_num += 1
+                # if i %100 == 0:
+                #     print('Ignored lattices number: {}'.format(ignored_num))
+                # continue
+                ## We scale it instead of remove directly.
+                frac_coords = frac_coords - frac_coords.min()
+                frac_coords = frac_coords / max(frac_coords.max(), 1.)
+                frac_coords -= (frac_coords.max(dim=0)[0] + frac_coords.min(dim=0)[0]) / 2.
+
+            S1 = Structure(lattice_vector,
                            torch.from_numpy(exported_lattice.connectity),
-                           torch.from_numpy(exported_lattice.coordinates), is_cartesian=True,
+                           frac_coords, is_cartesian=False,
                            diameter=exported_lattice.diameter,
                            properties=torch.from_numpy(dfi[self.C_names].values),
                            properties_names=self.C_names)
+
             edge_num = S1.num_edges
             node_feat = torch.zeros((S1.num_nodes, 1), dtype=torch.long)
             edge_feat = torch.ones((edge_num, 1), dtype=torch.float32) * S1.diameter
-
+            lattice_vector = S1.lattice_vector.view(1, -1)
             data = Data(
                 frac_coords=S1.frac_coords.to(torch.float32),
                 cart_coords=S1.cart_coords.to(torch.float32),
@@ -220,10 +245,10 @@ class LatticeStiffness(InMemoryDataset):
                 num_edges=edge_num,
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
+                vector=lattice_vector.to(torch.float32),
                 y=S1.properties.to(torch.float32),
                 to_jimages = S1.to_jimages
             )
-
             data_list.append(data)
         print('End preprocessing data.')
         print('Saving data...')
