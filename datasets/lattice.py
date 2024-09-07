@@ -249,7 +249,12 @@ class Structure:
 
     @staticmethod
     def correct_frac_coords(frac_coords, batch):
-        new_frac_coords = (frac_coords + 0.5) % 1. - 0.5
+        new_frac_coords = frac_coords + 0.5
+        # exclude the nodes on edge, corner, or face of the lattice
+        out_cell_mask = (new_frac_coords > 1.) | (new_frac_coords < 0.)
+        new_frac_coords[out_cell_mask] = new_frac_coords[out_cell_mask] % 1.
+
+        new_frac_coords = new_frac_coords - 0.5
         min_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='min')
         max_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='max')
         offset_frac_coords = (min_frac_coords + max_frac_coords) / 2.0
