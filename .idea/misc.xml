@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Black">
+    <option name="sdkName" value="SyMat" />
+  </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.11.7 (sftp://jianpengc@zhoulab-1.cs.vt.edu:22/home/jianpengc/anaconda3/envs/forcefields/bin/python3.11) (3)" project-jdk-type="Python SDK" />
+</project>
