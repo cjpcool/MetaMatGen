@@ -9,13 +9,13 @@ from runner import Runner
 # from utils import smact_validity, compute_elem_type_num_wdist, get_structure, compute_density_wdist, structure_validity
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_path', default='/home/jianpengc/projects/materials/MetaMatGen/result_2/model_699.pth', type=str, help='The directory for storing training outputs')
+parser.add_argument('--model_path', default='/home/jianpengc/projects/materials/MetaMatGen/result_nequip_w_latents_1/model_2399.pth', type=str, help='The directory for storing training outputs')
 # parser.add_argument('--dataset', type=str, default='perov_5', help='Dataset name, must be perov_5, carbon_24, or mp_20')
 parser.add_argument('--dataset', type=str, default='LatticeStiffness', help='Dataset name, must be perov_5, carbon_24, or mp_20, LatticeModulus, LatticeStiffness')
 parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='The directory for storing training outputs')
-parser.add_argument('--save_mat_path', type=str, default='recon_mat/step50_3', help='The directory for storing training outputs')
+parser.add_argument('--save_mat_path', type=str, default='recon_mat/result_nequip_w_latents', help='The directory for storing training outputs')
 
-parser.add_argument('--num_gen', type=int, default=20, help='Number of materials to generate')
+parser.add_argument('--num_gen', type=int, default=10, help='Number of materials to generate')
 
 args = parser.parse_args()
 
@@ -56,12 +56,12 @@ elif args.dataset in ['LatticeModulus', 'LatticeStiffness']:
 
 runner = Runner(conf, score_norm_path)
 runner.model.load_state_dict(torch.load(args.model_path))
-runner.load_data(data_path, args.dataset, file_name='training10000')
+runner.load_data(data_path, args.dataset, file_name='training_node_num9')
 loader = DataLoader(runner.train_dataset, batch_size=args.num_gen, shuffle=True)
 data_batch = next(iter(loader))
 data_batch = data_batch.to('cuda')
 
-gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.recon(data_batch, args.num_gen, None, coord_num_langevin_steps=100, threshold=0.5)
+gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.recon(data_batch, args.num_gen, None, coord_num_langevin_steps=100,coord_step_rate=1e-8, threshold=0.5)
 
 if not os.path.exists(args.save_mat_path):
     os.makedirs(args.save_mat_path)

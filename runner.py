@@ -1,4 +1,6 @@
 import os
+
+import pandas as pd
 import torch
 from torch_scatter import scatter
 from torch_geometric.data import DataLoader
@@ -145,6 +147,12 @@ class Runner():
             self.model.load_state_dict(torch.load(load_model_path))
 
         end_epoch = self.conf['end_epoch']
+        score_loss_list = []
+        score_loss_list_val = []
+        if self.conf['start_epoch'] != 0 and os.path.exists(os.path.join(out_path, 'train_score_loss.csv')):
+            df = pd.read_csv(os.path.join(out_path, 'train_score_loss.csv'))
+            score_loss_list.extend(df['score_loss'].to_list())
+            score_loss_list_val.extend(df['score_loss_val'].to_list())
         for epoch in range(self.conf['start_epoch'], end_epoch+1):
             if epoch == self.conf['start_epoch']:
                 last_optim_dict = self.optimizer.state_dict().copy()
@@ -202,7 +210,14 @@ class Runner():
                 edge_pred {:.4f} dist_reg {:.4f} property {:.4f} pbc_sym_reg {:.4f}'.format(epoch, avg_val_loss, avg_val_kld_loss, avg_val_kld_loss1, avg_val_kld_loss2,
                 avg_val_kld_loss3, avg_val_node_num_loss, avg_val_lattice_loss, avg_val_coord_loss, avg_val_edge_pred_loss, avg_val_dist_reg_loss, avg_val_property_loss, avg_val_pbc_sym_reg_loss))
                 file_obj.close()
-    
+            score_loss_list.append(avg_coord_loss)
+            score_loss_list_val.append(avg_val_coord_loss)
+
+            if epoch % self.conf['save_interval'] == 0:
+                df = pd.DataFrame({'score_loss': score_loss_list,'score_loss_val': score_loss_list_val})
+                df.to_csv(os.path.join(out_path, 'train_score_loss.csv'), index=False)
+
+
 
     def valid(self, loader):
         self.model.eval()
@@ -217,7 +232,7 @@ class Runner():
         with torch.no_grad():
             for iter_num, data_batch in enumerate(loader):
                 data_batch = data_batch.to('cuda')
-                loss_dict = self.model(data_batch, temp=self.conf['val_temp'], eval=True)
+                loss_dict = self.model(data_batch, temp=self.conf['val_temp'], eval=True, distance_reg=self.conf['distance_reg'])
 
                 kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
                 edge_pred_loss = loss_dict['edge_pred_loss']
@@ -391,7 +406,8 @@ class Runner():
             angles_list.append(mat_arrays[3].detach().cpu())
             frac_coords_list.append(mat_arrays[4].detach().cpu())
             edge_index_list.append(mat_arrays[5].detach().cpu())
-            prop_list.append(mat_arrays[6].detach().cpu())
+            if mat_arrays[6] is not None:
+                prop_list.append(mat_arrays[6].detach().cpu())
 
             num_mat = len(mat_arrays[0])
             num_remain -= num_mat
@@ -402,11 +418,15 @@ class Runner():
         all_lengths = torch.cat(lengths_list, dim=0)
         all_angles = torch.cat(angles_list, dim=0)
         all_frac_coords = torch.cat(frac_coords_list, dim=0)
-        all_props = torch.cat(prop_list, dim=0)
+
+        if len(prop_list) > 0:
+            all_props = torch.cat(prop_list, dim=0)
+        else:
+            all_props = data_batch.y.cpu()
 
 
         atom_types_list, lengths_list, angles_list, frac_coords_list = [], [], [], []
-        prop_list = []
+        prop_list1 = []
         out_edge_index_list = []
 
         num_atoms = num_atoms.cpu()
@@ -432,7 +452,7 @@ class Runner():
             angles = all_angles[idx].numpy()
             frac_coords = all_frac_coords.narrow(0, start_idx, num_atom).numpy()
 
-            prop_list.append(all_props[idx].numpy())
+            prop_list1.append(all_props[idx].numpy())
             atom_types_list.append(atom_types)
             lengths_list.append(lengths)
             angles_list.append(angles)
@@ -440,4 +460,4 @@ class Runner():
 
             start_idx += num_atom
 
-        return atom_types_list, lengths_list, angles_list, frac_coords_list, out_edge_index_list, prop_list
+        return atom_types_list, lengths_list, angles_list, frac_coords_list, out_edge_index_list, prop_list1

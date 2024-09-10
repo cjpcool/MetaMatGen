@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from torch_scatter import scatter
 
-
 def abs_cap(val, max_abs_val=1):
     """
     Returns the value with its absolute value capped at max_abs_val.
@@ -106,18 +105,22 @@ def correct_cart_coords(cart_coords, lengths, angles, num_atoms, batch):
 
     frac_coords = torch.einsum('bi,bij->bj', cart_coords, inv_lattice_nodes)
     frac_coords = correct_frac_coords(frac_coords, batch)
-    
+
     cart_coords = torch.einsum('bi,bij->bj', frac_coords, lattice_nodes)  # cart coords
     return cart_coords
 
 
-def correct_frac_coords(frac_coords, batch):
-    new_frac_coords = (frac_coords + 0.5) % 1. - 0.5
+def correct_frac_coords(frac_coords, batch, eps=1e-4):
+    new_frac_coords = frac_coords + 0.5
+    out_cell_mask = (new_frac_coords > 1.+eps) | (new_frac_coords < 0. - eps)
+    new_frac_coords[out_cell_mask] = new_frac_coords[out_cell_mask] % 1.
+
+    new_frac_coords = new_frac_coords - 0.5
     min_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='min')
     max_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='max')
     offset_frac_coords = (min_frac_coords + max_frac_coords) / 2.0
     new_frac_coords = new_frac_coords - offset_frac_coords[batch]
-    
+
     return new_frac_coords
 
 

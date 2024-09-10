@@ -3,6 +3,8 @@ import plotly.express as plt
 import plotly.graph_objects as go
 import operator
 import functools
+
+from utils import cart_to_frac_coords, frac_to_cart_coords
 from utils.voigt_rotation import get_rotation_matrix_np
 
 
@@ -17,11 +19,11 @@ def connect_points(coordinates, connectity, fig):
     return fig_temp
 
 def plot_lattice(coordinates,connectity, diameter=-1, save_dir=None):
-    fig = plt.scatter_3d(coordinates, x=0, y=1, z=2, width=20)
+    fig = plt.scatter_3d(coordinates, x=0, y=1, z=2)
     if connectity is not None:
         fig = connect_points(coordinates, connectity, fig)
+        fig.update_traces(marker=dict(size=5,line=dict(width=5)))
     fig.update_layout(title_text='Predicted lattice (diameter = {:.3f})'.format(diameter), title_x=0.5)
-    fig.update_traces(marker=dict(size=5,line=dict(width=5)))
 
     # fig.update_layout(
     #     scene=dict(
@@ -42,6 +44,8 @@ def plot_lattice(coordinates,connectity, diameter=-1, save_dir=None):
         print('Saving figure to {}'.format(save_dir))
         fig.write_image(save_dir)
         print('Saved figure to {}'.format(save_dir))
+
+
 
 
 class Topology:
@@ -68,7 +72,7 @@ class Topology:
     # apply affine deformation
     def affinely_deform_lattice(self,compound_lattice_coord,lattice):
         affine_def = self.get_affine_deformation(lattice)
-        final_lattice_coord = np.linalg.multi_dot([compound_lattice_coord,affine_def.transpose()])
+        final_lattice_coord = np.linalg.multi_dot([compound_lattice_coord, affine_def.transpose()])
         return final_lattice_coord
 
     # compute affine deformation matrix
@@ -92,7 +96,8 @@ class Topology:
                 conn = np.concatenate((conn,temp_conn+UC_nodes*2**i))
                 temp_conn = conn.copy()
                 temp_coord = coord.copy()
-            # shift center to origin
+            # shift center to origin\
+
             coord -= np.array([0.5, 0.5, 0.5])
             # normalize lattice
             coord /= 2.

@@ -4,16 +4,18 @@ import argparse
 import numpy as np
 import torch
 from runner import Runner
+from vis import plot_lattice_from_path
+
 # from utils import smact_validity, compute_elem_type_num_wdist, get_structure, compute_density_wdist, structure_validity
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_path', default='/home/jianpengc/projects/materials/MetaMatGen/result_3/model_599.pth', type=str, help='The directory for storing training outputs')
+parser.add_argument('--model_path', default='/home/jianpengc/projects/materials/MetaMatGen/result_nequip_w_latents_1/model_2839.pth', type=str, help='The directory for storing training outputs')
+# parser.add_argument('--model_path', default='/home/jianpengc/projects/materials/MetaMatGen/result_mlp/model_799.pth', type=str, help='The directory for storing training outputs')
 # parser.add_argument('--dataset', type=str, default='perov_5', help='Dataset name, must be perov_5, carbon_24, or mp_20')
 parser.add_argument('--dataset', type=str, default='LatticeStiffness', help='Dataset name, must be perov_5, carbon_24, or mp_20, LatticeModulus, LatticeStiffness')
 parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='The directory for storing training outputs')
-parser.add_argument('--save_mat_path', type=str, default='generated_mat/step50_equi_wosigma', help='The directory for storing training outputs')
-
-parser.add_argument('--num_gen', type=int, default=10, help='Number of materials to generate')
+parser.add_argument('--save_mat_path', type=str, default='generated_mat/result_nequip_w_latents_1', help='The directory for storing training outputs')
+parser.add_argument('--num_gen', type=int, default=20, help='Number of materials to generate')
 
 args = parser.parse_args()
 
@@ -57,7 +59,7 @@ runner.model.load_state_dict(torch.load(args.model_path))
 dataset = runner.load_data(data_path, args.dataset)
 
 
-gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.generate(args.num_gen, None, coord_num_langevin_steps=100)
+gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.generate(args.num_gen, None, coord_num_langevin_steps=100,coord_step_rate=1e-8, threshold=0.5)
 
 if not os.path.exists(args.save_mat_path):
     os.makedirs(args.save_mat_path)
@@ -76,6 +78,14 @@ for i in range(args.num_gen):
              prop_list=prop_list[i]
              )
 
+path = args.save_mat_path
+file_names = os.listdir(path)
+save_path = os.path.join('./vis/', args.save_mat_path)
+if not os.path.exists(save_path):
+    os.mkdir(save_path)
+for file_name in file_names:
+    save_dir = os.path.join(save_path,file_name[:-3]+'jpeg')
+    plot_lattice_from_path(path, file_name,cutoff=1., max_num_neighbors_threshold=5, save_dir=save_dir)
 
 # is_valid, validity = smact_validity(gen_atom_types_list)
 # print("composition validity: {}".format(validity))

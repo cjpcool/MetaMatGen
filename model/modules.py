@@ -1,6 +1,11 @@
+from typing import Union, Tuple
+
 import torch
-from torch import nn
+from torch import nn, Tensor, spmm
 from torch.nn import Linear, Embedding
+from torch_geometric.typing import OptPairTensor, Adj, Size, OptTensor
+from torch_sparse import SparseTensor
+
 try:
     from torch_geometric.nn.acts import swish
 except ImportError:
@@ -10,12 +15,81 @@ from torch_scatter import scatter
 from math import sqrt
 
 from .features import dist_emb, angle_emb, torsion_emb
-
+from torch_geometric.nn import GraphConv, MessagePassing, GATConv, GCNConv
 
 try:
     import sympy as sym
 except ImportError:
     sym = None
+
+
+
+
+
+class SimpleGNN(MessagePassing):
+    def __init__(
+        self,
+        in_channels: Union[int, Tuple[int, int]],
+        out_channels: int,
+        hidden_channels: int,
+        edge_channels: int,
+        aggr: str = 'add',
+        bias: bool = True,
+        **kwargs,
+    ):
+        super().__init__(aggr=aggr, **kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        if isinstance(in_channels, int):
+            in_channels = (in_channels, in_channels)
+
+        self.lin_input = Linear(in_channels[0], hidden_channels, bias=bias)
+        self.lin_edge = Linear(edge_channels, hidden_channels, bias=bias)
+        self.lin_rel = Linear(hidden_channels, out_channels, bias=bias)
+        self.lin_root = Linear(hidden_channels, out_channels, bias=False)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        self.lin_rel.reset_parameters()
+        self.lin_root.reset_parameters()
+
+    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,
+                edge_emb: OptTensor = None, size: Size = None) -> Tensor:
+
+        x = self.lin_input(x)
+        if edge_emb is not None:
+            edge_weight = self.lin_edge(edge_emb)
+
+        if isinstance(x, Tensor):
+            x: OptPairTensor = (x, x)
+
+        # propagate_type: (x: OptPairTensor, edge_weight: OptTensor)
+        out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
+                             size=size)
+        out = self.lin_rel(out)
+
+        x_r = x[1]
+        if x_r is not None:
+            out = out + self.lin_root(x_r)
+
+        return out
+
+    def message(self, x_j: Tensor, edge_weight: OptTensor) -> Tensor:
+        if edge_weight is not None:
+            x_j = edge_weight * x_j
+        return x_j
+
+    def message_and_aggregate(self, adj_t: SparseTensor,
+                              x: OptPairTensor) -> Tensor:
+        return spmm(adj_t, x[0], reduce=self.aggr)
+
+
+
+
 
 
 class emb(torch.nn.Module):
@@ -215,7 +289,6 @@ class update_v(torch.nn.Module):
         v = self.lin(v)
         return v
 
-
 class update_u(torch.nn.Module):
     def __init__(self):
         super(update_u, self).__init__()
@@ -231,3 +304,87 @@ def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
         mods += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
     mods += [nn.Linear(hidden_dim, out_dim)]
     return nn.Sequential(*mods)
+
+
+class res_mlp(torch.nn.Module):
+    def __init__(self, input_size, hidden, output_size):
+        super(res_mlp, self).__init__()
+        self.lin1 = nn.Linear(input_size, hidden)
+        self.lin2 = nn.Linear(hidden, hidden)
+        self.lin3 = nn.Linear(hidden, hidden)
+        self.lin4 = nn.Linear(hidden, hidden)
+        self.lin5 = nn.Linear(hidden, hidden)
+        self.lin6 = nn.Linear(hidden, hidden)
+        self.lin7 = nn.Linear(hidden, output_size)
+
+    def forward(self, x):
+        x0 = self.lin1(x)
+        x1 = nn.ReLU()(x0)
+        x2 = self.lin2(x1)
+        x3 = nn.ReLU()(x2)
+        x4 = x2 + x3
+        x5 = self.lin3(x4)
+        x6 = nn.ReLU()(x5)
+        x7 = x5 + x6
+        x8 = self.lin4(x7)
+        x9 = nn.ReLU()(x8)
+        x10 = x8 + x9
+        x11 = self.lin5(x10)
+        # x12 = nn.ReLU()(x11)
+        x12 = x10 + x11
+        x13 = self.lin6(x12)
+        x14 = nn.ReLU()(x13)
+        x15 = x13 + x14
+        x16 = self.lin7(x15)
+        return x16
+
+
+class aggregate_to_node(torch.nn.Module):
+    def __init__(self, hidden_channels, out_emb_channels, out_channels, num_output_layers, act=swish, output_init='GlorotOrthogonal'):
+        super(aggregate_to_node, self).__init__()
+        self.act = act
+        self.output_init = output_init
+
+        self.lin_input = nn.Linear(hidden_channels, out_emb_channels, bias=True)
+        self.lin_vec = nn.Linear(3, out_emb_channels, bias=False)
+        self.lins = torch.nn.ModuleList()
+        for _ in range(num_output_layers):
+            self.lins.append(nn.Linear(out_emb_channels, out_emb_channels))
+        self.lin = nn.Linear(out_emb_channels, out_emb_channels, bias=False)
+        self.lin_out = nn.Linear(out_emb_channels, out_channels, bias=False)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        glorot_orthogonal(self.lin_input.weight, scale=2.0)
+        for lin in self.lins:
+            glorot_orthogonal(lin.weight, scale=2.0)
+            lin.bias.data.fill_(0)
+        if self.output_init == 'zeros':
+            self.lin.weight.data.fill_(0)
+            self.lin_out.weight.data.fill_(0)
+        if self.output_init == 'GlorotOrthogonal':
+            glorot_orthogonal(self.lin.weight, scale=2.0)
+            glorot_orthogonal(self.lin_out.weight, scale=2.0)
+
+    def forward(self, e, i, dist_vec, node_num=None):
+        e = self.lin_input(e)
+
+        e = self.lin(self.act(e)) + e
+        if dist_vec is not None:
+            vec = (dist_vec / torch.norm(dist_vec, dim=1, keepdim=True))
+            vec = self.lin_vec(vec)
+
+        if node_num is not None:
+            v = scatter(e, i, dim=0, dim_size=node_num, reduce='add')
+            vec = scatter(vec, i, dim=0, dim_size=node_num, reduce='add')
+        else:
+            v = scatter(e, i, dim=0, reduce='add')
+            vec = scatter(vec, i, dim=0, reduce='add')
+
+        v = v * vec
+        for lin in self.lins:
+            v = self.act(lin(v)) + v
+        v = self.lin_out(v)
+
+        return v

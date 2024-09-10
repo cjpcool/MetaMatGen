@@ -6,7 +6,7 @@ from torch_scatter import scatter
 from .spherenet import SphereNetEncoder
 from .Nequip.nequip_encoder import NequipEncoder
 from .modules import build_mlp
-from .coordgen import CoordGen
+from .coordgen_0 import CoordGen
 
 
 class MatGen(torch.nn.Module):
@@ -185,6 +185,8 @@ class MatGen(torch.nn.Module):
             if self.prop_normalizer is not None:
                 target_y = self.prop_normalizer.transform(target_y)
             loss_dict['property_loss'] = F.mse_loss(pred_prop.view(-1), target_y)
+        else:
+            loss_dict['property_loss'] = torch.tensor(0.0)
 
         if self.use_multi_latent:
             loss_dict['kld_loss1'] = torch.mean(-0.5 * torch.sum(1.0 + log_var[:, :self.latent_dim] - mu[:, :self.latent_dim] ** 2 - log_var[:, :self.latent_dim].exp(), dim=1), dim=0)
@@ -195,7 +197,7 @@ class MatGen(torch.nn.Module):
         if self.lattice_scale:
             num_atoms = data_batch.num_atoms
             lengths = data_batch.lengths
-            scaled_lengths= lengths / float(num_atoms)**(1/3)
+            scaled_lengths= lengths / (num_atoms.view(-1, 1).float())**(1/3)
             target_lengths_angles = torch.cat([scaled_lengths, data_batch.angles], dim=-1)
         else:
             target_lengths_angles = torch.cat([data_batch.lengths, data_batch.angles], dim=-1)
@@ -203,8 +205,8 @@ class MatGen(torch.nn.Module):
             target_lengths_angles = self.lattice_normalizer.transform(target_lengths_angles)
         loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)
 
-        loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(latent_pos, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,
-                                                data_batch.lengths, data_batch.angles, data_batch.batch, None, None, None,
+        loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(latent_pos, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,data_batch.cart_coords,
+                                                data_batch.lengths, data_batch.angles, data_batch.batch, data_batch.edge_index, data_batch.to_jimages, data_batch.num_edges,
                                                 distance_reg=distance_reg, latent_prop=latent_prop)
 
         cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
@@ -215,9 +217,13 @@ class MatGen(torch.nn.Module):
         if (di > dj).sum() != (dj > di).sum():
             di = torch.cat([di,dj], dim=-1)
             dj = torch.cat([dj,di], dim=-1)
-        idxi = (cut_idx[0]==di.unsqueeze(0).t()).nonzero().t()
-        find_idxa = (cut_idx[1,idxi[1]] == dj[idxi[0]]).nonzero().view(-1)
-        target_edge[idxi[1,find_idxa]] = 1.0
+        matches_i = (cut_idx[0] == di.unsqueeze(0).t())
+        idxi = torch.where(matches_i)
+        matches_a = (cut_idx[1, idxi[1]] == dj[idxi[0]])
+        find_idxa = torch.where(matches_a)[0]
+        # idxi = (cut_idx[0]==di.unsqueeze(0).t()).nonzero().t()
+        # find_idxa = (cut_idx[1,idxi[1]] == dj[idxi[0]]).nonzero().view(-1)
+        target_edge[idxi[1][find_idxa]] = 1.0
         edge_loss = self.bce_loss(edge_prob.view(-1), target_edge)
         loss_dict['edge_pred_loss'] = edge_loss
 
@@ -234,7 +240,7 @@ class MatGen(torch.nn.Module):
         return F.binary_cross_entropy(pred, target, weight=weight, reduction=reduction)
 
     @torch.no_grad()
-    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.6):
+    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.5):
 
         if not self.use_multi_latent:
             if self.use_gpu:

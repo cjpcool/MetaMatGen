@@ -184,7 +184,6 @@ class SphereNetLightDecoder(torch.nn.Module):
             num_output_layers (int, optional): Number of linear layers for the output blocks. (default: :obj:`3`)
             act: (function, optional): The activation funtion. (default: :obj:`swish`)
             output_init: (str, optional): The initialization fot the output. It could be :obj:`GlorotOrthogonal` and :obj:`zeros`. (default: :obj:`GlorotOrthogonal`)
-            
     """
     def __init__(
         self, cutoff=5.0, num_layers=4,

@@ -95,7 +95,7 @@ class NequipDecoder(torch.nn.Module):
              range(lmax + 1)])
         invariant_neurons = radial_network_hidden_dim
         invariant_layers = radial_network_layers
-        average_num_neigh =average_num_neigh
+        average_num_neigh = average_num_neigh
         conv_kw = {"invariant_layers": invariant_layers, "invariant_neurons": invariant_neurons,
                    "avg_num_neighbors": average_num_neigh}
 
@@ -113,6 +113,8 @@ class NequipDecoder(torch.nn.Module):
         self.conv_layers = torch.nn.ModuleList(conv_layers)
 
         # final mappings
+        # self.linear_post_layer = AtomwiseLinear(last_node_irrep, node_feature_irrep)
+
         irreps_mid = []
         instructions = []
 
@@ -187,14 +189,16 @@ class NequipDecoder(torch.nn.Module):
         # convolution
         for layer in self.conv_layers:
             h = layer(x_attr, h, edge_length_embedding, edge_sh, edge_index)
+            h += h
 
         h = h.squeeze()
         h = self.layer_norm(h)
+
+        # h = self.linear_post_layer(h)
 
         # compute edge_feature
         edge_weight = self.fc(edge_length_embedding)
         edge_features = self.tp(h[i], edge_sh, edge_weight)
         edge_features = self.lin(edge_features)
-
 
         return edge_features

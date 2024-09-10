@@ -76,27 +76,49 @@ class LatticeModulus(InMemoryDataset):
         print('Processing data...')
         with open(self.raw_paths[0], mode='rb') as f:
             raw_data = pickle.load(f)
-
+        print(len(raw_data))
         data_list = []
         #['Name', 'Other name(s)', 'lengths', 'angles', 'Z_avg', 'Young', 'Shear', 'Poisson', 'Emax',
          # 'Scaling constants', 'Scaling exponents', 'has overlapping bars', 'Nodal positions', 'Edge index']
         for i in tqdm(range(len(raw_data))):
+        # for i in tqdm(range(1000)):
             exported_lattice = raw_data[i]
             try:
                 properties = torch.FloatTensor(exported_lattice['Young']+exported_lattice['Shear']+exported_lattice['Poisson'])
+                lattice_param = torch.FloatTensor([exported_lattice['lengths'],exported_lattice['angles']])
+                frac_coords = torch.FloatTensor(exported_lattice['Nodal positions']).squeeze(1) - torch.tensor([0.5,0.5,0.5])
+                cart_coords = Structure.frac_to_cart_coords(frac_coords, lattice_param[0], lattice_param[1], frac_coords.shape[0])
+                edge_index = torch.LongTensor(exported_lattice['Edge index']).squeeze(1)
+                edge_index, cart_coords = Structure.remove_overlapping_nodes(edge_index.numpy(), cart_coords.numpy(), tol=1e-3)
 
-                S1 = Structure(torch.FloatTensor([exported_lattice['lengths'],exported_lattice['angles']]),
-                               torch.LongTensor(exported_lattice['Edge index']).squeeze(1),
-                               torch.FloatTensor(exported_lattice['Nodal positions']).squeeze(1), is_cartesian=False,
+                S1 = Structure(lattice_param,
+                               edge_index,
+                               cart_coords, is_cartesian=True,
                                properties=properties,
                                properties_names=self.properties_names)
-            except KeyError:
-                print('Error sample {}, skip it.'.format(i))
+            except KeyError as e:
+                print('Error sample {}, skip it.'.format(i), e)
                 continue
-            edge_num = S1.edge_index.shape[1].item()
+            edge_num = S1.num_edges
             node_feat = torch.zeros((S1.num_nodes, 1), dtype=torch.long)
             edge_feat = torch.zeros((edge_num, 1), dtype=torch.float32)
-            edge_num = S1.num_edges
+            # edge_num = S1.num_edges
+            # node_feat = torch.zeros((S1.num_nodes, 1), dtype=torch.long)
+            # edge_feat = torch.ones((edge_num, 1), dtype=torch.float32) * S1.diameter
+            # data = Data(
+            #     frac_coords=S1.frac_coords.to(torch.float32),
+            #     cart_coords=S1.cart_coords.to(torch.float32),
+            #     node_feat=node_feat,
+            #     edge_feat=edge_feat,
+            #     edge_index=S1.edge_index,
+            #     num_nodes=S1.num_nodes,
+            #     num_atoms=S1.num_nodes,
+            #     num_edges=edge_num,
+            #     lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
+            #     angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
+            #     y=S1.properties.to(torch.float32),
+            #     to_jimages = S1.to_jimages
+            # )
 
             data = Data(
                 frac_coords=S1.frac_coords.to(torch.float32),
@@ -109,9 +131,12 @@ class LatticeModulus(InMemoryDataset):
                 num_edges=edge_num,
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
+                vector=S1.lattice_vector.view(1, -1),
                 y=S1.properties.to(torch.float32),
                 to_jimages = S1.to_jimages
             )
+
+
 
             data_list.append(data)
         print('End preprocessing data.')
@@ -125,12 +150,6 @@ class LatticeModulus(InMemoryDataset):
         train_idx, val_idx, test_idx = torch.LongTensor(ids[:train_size]), torch.tensor(ids[train_size:train_size + valid_size]), torch.tensor(ids[train_size + valid_size:])
         split_dict = {'train': train_idx, 'valid': val_idx, 'test': test_idx}
         return split_dict
-
-
-
-
-
-
 
 
 class LatticeStiffness(InMemoryDataset):
@@ -188,6 +207,7 @@ class LatticeStiffness(InMemoryDataset):
         path = download_url(url, self.raw_dir)
         return path
 
+
     def process(self):
         print('Processing data...')
 
@@ -195,20 +215,36 @@ class LatticeStiffness(InMemoryDataset):
         print(len(df))
         data_list = []
 
+        ignored_num = 0
         for i in tqdm(range(len(df))):
-        # for i in tqdm(range(10000)):
             dfi = df.iloc[i]
             exported_lattice = Topology(dfi)
-            S1 = Structure(torch.from_numpy(exported_lattice.lattice_vector),
+
+            coords = torch.from_numpy(exported_lattice.coordinates)
+            lattice_vector = torch.from_numpy(exported_lattice.lattice_vector)
+            lengths, angles = Structure.lattice_vector_to_parameters(lattice_vector)
+
+            frac_coords = Structure.cart_to_frac_coords(coords, lengths, angles, coords.shape[0])
+            if frac_coords.max() > 0.5 or frac_coords.min() < -0.5:
+                # ignored_num += 1
+                # if i %100 == 0:
+                #     print('Ignored lattices number: {}'.format(ignored_num))
+                # continue
+                frac_coords = frac_coords - frac_coords.min()
+                frac_coords = frac_coords / max(frac_coords.max(), 1.)
+                frac_coords -= (frac_coords.max(dim=0)[0] + frac_coords.min(dim=0)[0]) / 2.
+
+            S1 = Structure(lattice_vector,
                            torch.from_numpy(exported_lattice.connectity),
-                           torch.from_numpy(exported_lattice.coordinates), is_cartesian=True,
+                           frac_coords, is_cartesian=False,
                            diameter=exported_lattice.diameter,
                            properties=torch.from_numpy(dfi[self.C_names].values),
                            properties_names=self.C_names)
+
             edge_num = S1.num_edges
             node_feat = torch.zeros((S1.num_nodes, 1), dtype=torch.long)
             edge_feat = torch.ones((edge_num, 1), dtype=torch.float32) * S1.diameter
-
+            lattice_vector = S1.lattice_vector.view(1, -1)
             data = Data(
                 frac_coords=S1.frac_coords.to(torch.float32),
                 cart_coords=S1.cart_coords.to(torch.float32),
@@ -220,10 +256,10 @@ class LatticeStiffness(InMemoryDataset):
                 num_edges=edge_num,
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
+                vector=lattice_vector.to(torch.float32),
                 y=S1.properties.to(torch.float32),
                 to_jimages = S1.to_jimages
             )
-
             data_list.append(data)
         print('End preprocessing data.')
         print('Saving data...')
@@ -243,14 +279,57 @@ if __name__ == '__main__':
     from torch_geometric.loader import DataLoader
     from utils.lattice_utils import plot_lattice
 
-    dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
+    # dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
+    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num9')
     # dataset = LatticeModulus('D:\项目\Material design\code_data\data\LatticeModulus', file_name='data')
+
+    '''
+    data_list=[]
+    for i in tqdm(range(len(dataset))):
+        data_i = dataset[i]
+        frac_coords = data_i.frac_coords
+        if frac_coords.max() > 0.5 or frac_coords.min() < -0.5:
+            frac_coords = frac_coords - frac_coords.min()
+            frac_coords = frac_coords / max(frac_coords.max(), 1.)
+            frac_coords -= (frac_coords.max(dim=0)[0] + frac_coords.min(dim=0)[0]) / 2.
+            cart_coords = Structure.frac_to_cart_coords(frac_coords, data_i.lengths, data_i.angles, data_i.cart_coords.shape[0])
+        else:
+            cart_coords = data_i.cart_coords
+        data = Data(
+            frac_coords=frac_coords,
+            cart_coords=cart_coords,
+            node_feat=data_i.node_feat,
+            edge_feat=data_i.edge_feat,
+            edge_index=data_i.edge_index,
+            num_nodes=data_i.num_nodes,
+            num_atoms=data_i.num_nodes,
+            num_edges=data_i.num_edges,
+            lengths=data_i.lengths,
+            angles=data_i.angles,
+            vector=data_i.vector,
+            y=data_i.y,
+            to_jimages=data_i.to_jimages
+        )
+        data_list.append(data)
+    print('End preprocessing data.')
+    print('Saving data...')
+    torch.save(MD17.collate(data_list), '/home/jianpengc/datasets/metamaterial/LatticeStiffness/training_node_num9/scaled_data.pt')
+    print('Completed preprocessing data.')
+    '''
+    # save specific data
+    # import numpy as np
+    # y = np.array([dataset[i].num_nodes for i in range(len(dataset))])
+    # dataset_9 = dataset.copy(np.nonzero(y <= 9)[0])
+    # torch.save((dataset_9.data, dataset_9.slices), '/home/jianpengc/datasets/metamaterial/LatticeStiffness/training/processed/data_num9.pt')
+
+
     split_idx = dataset.get_idx_split(len(dataset), train_size=5, valid_size=5, seed=42)
+    print((dataset.frac_coords > 1.0).sum())
     print(split_idx.keys())
     print(dataset[split_idx['train']])
     train_dataset, valid_dataset, test_dataset = dataset[split_idx['train']], dataset[split_idx['valid']], dataset[
         split_idx['test']]
-    train_loader = DataLoader(dataset, batch_size=2, shuffle=True)
+    train_loader = DataLoader(dataset, batch_size=10, shuffle=True)
     print(dataset)
     data_batch = next(iter(train_loader))
     print(data_batch)
@@ -264,9 +343,13 @@ if __name__ == '__main__':
     print('average edge num', edge_num_per_lattice.float().mean())
     print('min edge num', min(edge_num_per_lattice))
 
-    data = dataset[0]
+    data = dataset[10]
     print(data.edge_index.dtype)
     print(data.y)
     print(data.cart_coords.dtype)
 
-    # plot_lattice(data.cart_coords, data.edge_index.t(), show=True)
+    # plot_lattice(data.cart_coords, data.edge_index.t())
+
+    from utils.mat_utils import correct_cart_coords, frac_to_cart_coords
+    # plot_lattice(data.frac_coords, data.edge_index.t())
+

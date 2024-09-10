@@ -1,3 +1,3 @@
 from .matgen import MatGen
-from .coordgen import CoordGen
+from .coordgen_0 import CoordGen
 from .spherenet_light import SphereNetLightDecoder
