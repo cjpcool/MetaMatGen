@@ -34,7 +34,7 @@ def plot_lattice_from_path(path, name, cutoff=1.0,max_num_neighbors_threshold=3,
     atom_types = lattice_npz['atom_types']
     num_atoms = torch.tensor([atom_types.shape[0]])
     frac_coords, lengths, angles = torch.from_numpy(frac_coords),torch.from_numpy(lengths).unsqueeze(0), torch.from_numpy(angles).unsqueeze(0)
-    cart_coords = frac_to_cart_coords(frac_coords,lengths,
+    cart_coords = frac_to_cart_coords(frac_coords, lengths,
                                       angles, num_atoms)
     # cart_coords = frac_coords
 
@@ -51,9 +51,9 @@ def plot_lattice_from_path(path, name, cutoff=1.0,max_num_neighbors_threshold=3,
 
 if __name__ == '__main__':
 
-    path = './generated_mat/step50_500'
+    path = './generated_mat/new_data'
     file_names = os.listdir(path)
-    save_path = './vis/generated_mat/step50_500'
+    save_path = './vis/generated_mat/new_data'
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     for file_name in file_names:

@@ -6,6 +6,7 @@ import numpy as np
 from model import MatGen
 from datasets.dataset_truss import LatticeStiffness, LatticeModulus
 from utils import StandardScalerTorch
+from tqdm import tqdm
 
 
 class Runner():
@@ -46,18 +47,21 @@ class Runner():
         total_edge_pred_loss = 0.0
 
         for iter_num, data_batch in enumerate(loader):
+            #print(data_batch.cart_coords.shape)
             data_batch = data_batch.to('cuda')
             loss_dict = self.model(data_batch, temp=self.conf['train_temp'], distance_reg=self.conf['distance_reg'])
 
-            kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
+            coord_loss = loss_dict['coord_loss']
+            '''kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
             edge_pred_loss = loss_dict['edge_pred_loss']
             dist_reg_loss = loss_dict['dist_reg_loss']
             property_loss = loss_dict['property_loss']
-            pbc_sym_reg_loss = loss_dict['pbc_sym_reg_loss']
-            loss = self.conf['kld_weight'] * kld_loss + self.conf['node_num_loss_weight'] * node_num_loss \
-                + self.conf['lattice_weight'] * lattice_loss + self.conf['coord_weight'] * coord_loss + self.conf['edge_pred_weight'] * edge_pred_loss + \
-                self.conf['dist_reg_weight'] * dist_reg_loss + self.conf['property_weight'] * property_loss + self.conf['pbc_sym_reg_weight'] * pbc_sym_reg_loss
-
+            pbc_sym_reg_loss = loss_dict['pbc_sym_reg_loss']'''
+            #loss = self.conf['kld_weight'] * kld_loss + self.conf['node_num_loss_weight'] * node_num_loss \
+            #    + self.conf['lattice_weight'] * lattice_loss + self.conf['coord_weight'] * coord_loss + self.conf['edge_pred_weight'] * edge_pred_loss + \
+            #    self.conf['dist_reg_weight'] * dist_reg_loss + self.conf['property_weight'] * property_loss + self.conf['pbc_sym_reg_weight'] * pbc_sym_reg_loss
+            loss = self.conf['coord_weight'] * coord_loss
+            
             # if epoch > 10 and (loss < 0.1 or loss > 100):
             #     self.optimizer.zero_grad()
             #     return None
@@ -65,12 +69,15 @@ class Runner():
             if torch.isnan(loss) or torch.isinf(loss):
                 self.optimizer.zero_grad()
                 print('Loss is NAN')
-                print(
+                '''print(
                     'NAN Loss in iter {} | loss kld {:.4f} lattice {:.4f} coord {:.4f}, edge {:4f}, min_dist_reg {:4f}, prop {:4f}, pbc_sym_reg_loss {:4f}, node_num_loss {:4f}'.format(
                         iter_num, kld_loss.to('cpu').item(),
                          lattice_loss.to('cpu').item(), coord_loss.to('cpu').item(),
                         edge_pred_loss.item(), dist_reg_loss, property_loss.item(), pbc_sym_reg_loss.item(),
-                        node_num_loss.item()))
+                        node_num_loss.item()))'''
+                print(
+                    'NAN Loss in iter {} | loss coord {:.4f}'.format(
+                        iter_num,  coord_loss.to('cpu').item()))
                 return None
 
             self.optimizer.zero_grad()
@@ -79,16 +86,16 @@ class Runner():
             self.optimizer.step()
 
             total_loss += loss.to('cpu').item()
-            total_kld_loss += kld_loss.to('cpu').item()
+            #total_kld_loss += kld_loss.to('cpu').item()
 
-            total_node_num_loss += node_num_loss.to('cpu').item()
+            #total_node_num_loss += node_num_loss.to('cpu').item()
 
-            total_lattice_loss += lattice_loss.to('cpu').item()
-            total_coord_loss += coord_loss.to('cpu').item()
-            total_dist_reg_loss += dist_reg_loss.to('cpu').item()
-            total_property_loss += property_loss.to('cpu').item()
-            total_pbc_sym_reg_loss += pbc_sym_reg_loss.to('cpu').item()
-            total_edge_pred_loss += edge_pred_loss.to('cpu').item()
+            #total_lattice_loss += lattice_loss.to('cpu').item()
+            #total_coord_loss += coord_loss.to('cpu').item()
+            #total_dist_reg_loss += dist_reg_loss.to('cpu').item()
+            #total_property_loss += property_loss.to('cpu').item()
+            #total_pbc_sym_reg_loss += pbc_sym_reg_loss.to('cpu').item()
+            #total_edge_pred_loss += edge_pred_loss.to('cpu').item()
 
 
             if 'kld_loss1' in loss_dict and 'kld_loss2' in loss_dict and 'kld_loss3' in loss_dict:
@@ -102,9 +109,9 @@ class Runner():
             if iter_num % self.conf['verbose'] == 0:
                 # print('Training iteration {} | loss kld {:.4f} kld1 {:.4f} kld2 {:.4f} kld3 {:.4f} elem_type_num {:.4f} elem_type {:.4f} elem_num {:.4f} lattice {:.4f} coord {:.4f}'.format(iter_num, kld_loss.to('cpu').item(),
                 #     kld_loss1, kld_loss2, kld_loss3, elem_type_num_loss.to('cpu').item(), elem_type_loss.to('cpu').item(), elem_num_loss.to('cpu').item(), lattice_loss.to('cpu').item(), coord_loss.to('cpu').item()))
-                print('Training iteration {} | loss kld {:.4f} kld1 {:.4f} kld2 {:.4f} kld3 {:.4f} lattice {:.4f} coord {:.4f}, edge {:4f}, min_dist_reg {:4f}, prop {:4f}, pbc_sym_reg_loss {:4f}, node_num_loss {:4f}'.format(iter_num, kld_loss.to('cpu').item(),
-                    kld_loss1, kld_loss2, kld_loss3, lattice_loss.to('cpu').item(), coord_loss.to('cpu').item(), edge_pred_loss.item(), dist_reg_loss, property_loss.item(), pbc_sym_reg_loss.item(), node_num_loss.item()))
-
+                #print('Training iteration {} | loss kld {:.4f} kld1 {:.4f} kld2 {:.4f} kld3 {:.4f} lattice {:.4f} coord {:.4f}, edge {:4f}, min_dist_reg {:4f}, prop {:4f}, pbc_sym_reg_loss {:4f}, node_num_loss {:4f}'.format(iter_num, kld_loss.to('cpu').item(),
+                #    kld_loss1, kld_loss2, kld_loss3, lattice_loss.to('cpu').item(), coord_loss.to('cpu').item(), edge_pred_loss.item(), dist_reg_loss, property_loss.item(), pbc_sym_reg_loss.item(), node_num_loss.item()))
+                print('Training iteration {} | loss coord {:.4f}'.format(iter_num, coord_loss.to('cpu').item()))
         iter_num += 1
         return (total_loss / iter_num, total_kld_loss / iter_num, total_kld_loss1 / iter_num, total_kld_loss2 / iter_num, total_kld_loss3 / iter_num, \
             total_node_num_loss / iter_num, total_lattice_loss / iter_num, total_coord_loss / iter_num, total_edge_pred_loss / iter_num, \
@@ -123,10 +130,11 @@ class Runner():
                 dataset = LatticeStiffness(data_path)
             else:
                 dataset = LatticeStiffness(data_path, file_name=file_name)
-
+                
+        #print(dataset[0])
+        #input()
         split_idx = dataset.get_idx_split(len(dataset), train_size=self.conf['train_size'], valid_size=self.conf['valid_size'], seed=self.conf['seed'])
         self.train_dataset, self.valid_dataset, self.test_dataset = dataset[split_idx['train']], dataset[split_idx['valid']], dataset[split_idx['test']]
-
 
     def train(self, data_path, val_data_path, out_path, load_model_path=None):
         torch.nn.init.constant_(self.model.fc_var.weight, 1e-10)
@@ -134,7 +142,29 @@ class Runner():
         torch.nn.init.constant_(self.model.fc_lattice_log_var[-1].weight, 1e-10)
         torch.nn.init.constant_(self.model.fc_lattice_log_var[-1].bias, 0.)
 
+        
+
+        #for shrinking data
+        #print(self.train_dataset.cart_coords.shape)
+            #data.cart_coords = self.shrink_coords(data.cart_coords)
+        #self.train_dataset.cart_coords = self.train_dataset.cart_coords.view(self.conf['train_size'],self.conf['model']['num_node'],3)
+        #self.train_dataset.cart_coords = self.shrink_coords(self.train_dataset.cart_coords,self.conf['train_size'])
+        '''for _, data in enumerate(tqdm(self.train_dataset)):
+            data.cart_coords = self.shrink_coords(data.cart_coords,1)
+            print(data)
+            #input()'''
+        '''for i in tqdm((range(self.conf['train_size']))):
+            print(i)
+            aaa = self.shrink_coords(self.train_dataset[i].cart_coords,1)
+            print(aaa)
+            self.train_dataset[i].cart_coords = aaa
+            print(self.train_dataset[i].cart_coords)
+
+        print(self.train_dataset.cart_coords.shape)'''
+
         loader = DataLoader(self.train_dataset, batch_size=self.conf['batch_size'], shuffle=True)
+
+        #print(self.train_dataset.cart_coords.shape)
         self.model.lattice_normalizer = self._get_normalizer(self.train_dataset)
         self.model.prop_normalizer = self._get_prop_normalizer(self.train_dataset)
 
@@ -145,7 +175,7 @@ class Runner():
             self.model.load_state_dict(torch.load(load_model_path))
 
         end_epoch = self.conf['end_epoch']
-        for epoch in range(self.conf['start_epoch'], end_epoch+1):
+        for epoch in tqdm(range(self.conf['start_epoch'], end_epoch+1)):
             if epoch == self.conf['start_epoch']:
                 last_optim_dict = self.optimizer.state_dict().copy()
                 last_model_dict = self.model.state_dict().copy()
@@ -217,23 +247,21 @@ class Runner():
         with torch.no_grad():
             for iter_num, data_batch in enumerate(loader):
                 data_batch = data_batch.to('cuda')
-                loss_dict = self.model(data_batch, temp=self.conf['val_temp'], eval=True)
+                loss_dict = self.model(data_batch, temp=self.conf['val_temp'], eval=True, distance_reg=self.conf['distance_reg'])
 
-                kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
+                coord_loss = loss_dict['coord_loss']
+                '''kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
                 edge_pred_loss = loss_dict['edge_pred_loss']
                 dist_reg_loss = loss_dict['dist_reg_loss']
                 property_loss = loss_dict['property_loss']
-                pbc_sym_reg_loss = loss_dict['pbc_sym_reg_loss']
-                loss = self.conf['kld_weight'] * kld_loss + self.conf['node_num_loss_weight'] * node_num_loss \
-                       + self.conf['lattice_weight'] * lattice_loss + self.conf['coord_weight'] * coord_loss + \
-                       self.conf['edge_pred_weight'] * edge_pred_loss + \
-                       self.conf['dist_reg_weight'] * dist_reg_loss + self.conf['property_weight'] * property_loss + self.conf['pbc_sym_reg_weight'] * pbc_sym_reg_loss
+                pbc_sym_reg_loss = loss_dict['pbc_sym_reg_loss']'''
+                loss = self.conf['coord_weight'] * coord_loss
                 
                 total_loss += loss.to('cpu').item()
-                total_kld_loss += kld_loss.to('cpu').item()
+                '''total_kld_loss += kld_loss.to('cpu').item()
                 total_node_num_loss += node_num_loss.to('cpu').item()
                 total_lattice_loss += lattice_loss.to('cpu').item()
-                total_coord_loss += coord_loss.to('cpu').item()
+                total_coord_loss += coord_loss.to('cpu').item()'''
 
                 if 'kld_loss1' in loss_dict and 'kld_loss2' in loss_dict and 'kld_loss3' in loss_dict:
                     kld_loss1, kld_loss2, kld_loss3 = loss_dict['kld_loss1'].to('cpu').item(), loss_dict['kld_loss2'].to('cpu').item(), loss_dict['kld_loss3'].to('cpu').item()
@@ -243,18 +271,21 @@ class Runner():
                 else:
                     kld_loss1, kld_loss2, kld_loss3 = 0.0, 0.0, 0.0
 
-                total_node_num_loss += loss_dict['node_num_loss'].to('cpu').item()
-                total_lattice_loss += lattice_loss.to('cpu').item()
+                #total_node_num_loss += loss_dict['node_num_loss'].to('cpu').item()
+                #total_lattice_loss += lattice_loss.to('cpu').item()
                 total_coord_loss += coord_loss.to('cpu').item()
-                total_dist_reg_loss += dist_reg_loss.to('cpu').item()
-                total_property_loss += property_loss.to('cpu').item()
-                total_pbc_sym_reg_loss += pbc_sym_reg_loss.to('cpu').item()
-                total_edge_pred_loss += edge_pred_loss.to('cpu').item()
+                #total_dist_reg_loss += dist_reg_loss.to('cpu').item()
+                #total_property_loss += property_loss.to('cpu').item()
+                #total_pbc_sym_reg_loss += pbc_sym_reg_loss.to('cpu').item()
+                #total_edge_pred_loss += edge_pred_loss.to('cpu').item()
 
         iter_num += 1
+        #return (total_loss / iter_num, total_kld_loss / iter_num, total_kld_loss1 / iter_num, total_kld_loss2 / iter_num, total_kld_loss3 / iter_num, \
+        #    total_node_num_loss / iter_num, total_lattice_loss / iter_num, total_coord_loss / iter_num, total_edge_pred_loss / iter_num, \
+        #        total_dist_reg_loss/ iter_num, total_property_loss / iter_num, total_pbc_sym_reg_loss / iter_num)
         return (total_loss / iter_num, total_kld_loss / iter_num, total_kld_loss1 / iter_num, total_kld_loss2 / iter_num, total_kld_loss3 / iter_num, \
-            total_node_num_loss / iter_num, total_lattice_loss / iter_num, total_coord_loss / iter_num, total_edge_pred_loss / iter_num, \
-                total_dist_reg_loss/ iter_num, total_property_loss / iter_num, total_pbc_sym_reg_loss / iter_num)
+                total_node_num_loss / iter_num, total_lattice_loss / iter_num, total_coord_loss / iter_num, total_edge_pred_loss / iter_num, \
+                    total_dist_reg_loss/ iter_num, total_property_loss / iter_num, total_pbc_sym_reg_loss / iter_num)
 
 
     def generate(self, num_gen, data_path, coord_num_langevin_steps=100, coord_step_rate=1e-4, threshold=0.6):
@@ -295,7 +326,7 @@ class Runner():
             lengths_list.append(mat_arrays[2].detach().cpu())
             angles_list.append(mat_arrays[3].detach().cpu())
             frac_coords_list.append(mat_arrays[4].detach().cpu())
-            edge_index_list.append(mat_arrays[5].detach().cpu())
+            #edge_index_list.append(mat_arrays[5].detach().cpu())
             prop_list.append(mat_arrays[6].detach().cpu())
 
 
@@ -303,13 +334,14 @@ class Runner():
             num_remain -= num_mat
             print('{} materials are generated!'.format(num_gen - num_remain))
         
+        #print(mat_arrays)
+        #input()
         all_num_atoms = torch.cat(num_atoms_list, dim=0)
         all_atom_types = torch.cat(atom_types_list, dim=0)
         all_lengths = torch.cat(lengths_list, dim=0)
         all_angles = torch.cat(angles_list, dim=0)
         all_frac_coords = torch.cat(frac_coords_list, dim=0)
         all_props = torch.cat(prop_list, dim=0)
-
         out_edge_index_list = []
 
         for idx, all_edge_index in enumerate(edge_index_list):
@@ -333,10 +365,12 @@ class Runner():
         prop_list = []
         start_idx = 0
         for idx, num_atom in enumerate(all_num_atoms.tolist()):
+            num_atom = self.conf['model']['num_node']
             atom_types = all_atom_types.narrow(0, start_idx, num_atom).numpy()
             lengths = all_lengths[idx].numpy()
             angles = all_angles[idx].numpy()
-            frac_coords = all_frac_coords.narrow(0, start_idx, num_atom).numpy()
+            frac_coords = all_frac_coords.narrow(0, start_idx, num_atom).numpy() #ini
+            #frac_coords = all_frac_coords
 
             prop_list.append(all_props[idx].numpy())
             atom_types_list.append(atom_types)
@@ -390,8 +424,9 @@ class Runner():
             lengths_list.append(mat_arrays[2].detach().cpu())
             angles_list.append(mat_arrays[3].detach().cpu())
             frac_coords_list.append(mat_arrays[4].detach().cpu())
-            edge_index_list.append(mat_arrays[5].detach().cpu())
-            prop_list.append(mat_arrays[6].detach().cpu())
+            #edge_index_list.append(mat_arrays[5].detach().cpu())
+            if mat_arrays[6] is not None:
+                prop_list.append(mat_arrays[6].detach().cpu())
 
             num_mat = len(mat_arrays[0])
             num_remain -= num_mat
@@ -402,11 +437,15 @@ class Runner():
         all_lengths = torch.cat(lengths_list, dim=0)
         all_angles = torch.cat(angles_list, dim=0)
         all_frac_coords = torch.cat(frac_coords_list, dim=0)
-        all_props = torch.cat(prop_list, dim=0)
+
+        if len(prop_list) > 0:
+            all_props = torch.cat(prop_list, dim=0)
+        else:
+            all_props = data_batch.y.cpu()
 
 
         atom_types_list, lengths_list, angles_list, frac_coords_list = [], [], [], []
-        prop_list = []
+        prop_list1 = []
         out_edge_index_list = []
 
         num_atoms = num_atoms.cpu()
@@ -430,14 +469,52 @@ class Runner():
             atom_types = all_atom_types.narrow(0, start_idx, num_atom).numpy()
             lengths = all_lengths[idx].numpy()
             angles = all_angles[idx].numpy()
-            frac_coords = all_frac_coords.narrow(0, start_idx, num_atom).numpy()
+            #frac_coords = all_frac_coords.narrow(0, start_idx, num_atom).numpy()
 
-            prop_list.append(all_props[idx].numpy())
+            prop_list1.append(all_props[idx].numpy())
             atom_types_list.append(atom_types)
             lengths_list.append(lengths)
             angles_list.append(angles)
-            frac_coords_list.append(frac_coords)
+            #frac_coords_list.append(frac_coords)
 
             start_idx += num_atom
 
-        return atom_types_list, lengths_list, angles_list, frac_coords_list, out_edge_index_list, prop_list
+        return atom_types_list, lengths_list, angles_list, frac_coords_list, out_edge_index_list, prop_list1
+    
+    def find_corners_index(self,coords):
+        corners = []  #index of 4 corners
+        center = torch.mean(coords,dim=0)
+        for i in range(self.conf['model']['num_node']):
+            if torch.norm(coords[i,:] - center) < 1e-6:
+                continue
+            corners.append(i)
+        selected_corners = [corners[0]] #4 selected corners to represent the lattice
+        for i in range(1,8):
+            for j in range(1,8):
+                for k in range(1,8):
+                    if torch.norm((coords[corners[0],:]-coords[corners[i],:]-coords[corners[j],:]+coords[corners[k],:])) < 1e-6:
+                        if torch.norm((coords[corners[0],:]+coords[corners[i],:]+coords[corners[j],:]+coords[corners[k],:])-4*center) > 1e-6:
+                            for h in range(1,8):
+                                if torch.norm((coords[corners[k],:]+coords[corners[h],:])-2*center) < 1e-6:
+                                    return corners, selected_corners + [corners[i],corners[j],corners[h]]
+        return corners, [0,1,2,3]
+
+    def shrink_coords(self,ini_coords,batch_size):
+            reshaped_coords = ini_coords.view(batch_size,-1,3)
+            print(reshaped_coords.shape)
+            num_node = reshaped_coords.shape[1]
+            result = torch.zeros((batch_size,5,3))
+            for i in range(batch_size):
+                corners, selected_corners = self.find_corners_index(reshaped_coords[i,:,:])
+                #print(corners)
+                #print(selected_corners)
+                for j in range(4):
+                    result[i,j,:] = reshaped_coords[i,selected_corners[j],:]
+                position = 4
+                for j in range(num_node):
+                    if j not in corners:
+                        print(position)
+                        print(j)
+                        result[i,position,:] = reshaped_coords[i,j,:]
+                        position += 1
+            return result.view(-1,3)
