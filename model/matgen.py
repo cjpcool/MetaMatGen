@@ -11,7 +11,7 @@ from .coordgen import CoordGen
 
 class MatGen(torch.nn.Module):
     def __init__(self, enc_backbone_params, dec_backbone_params, latent_dim, num_fc_hidden_layers, fc_hidden_dim, max_num_atoms, min_num_atoms,
-        num_time_steps, noise_start, noise_end, cutoff, max_num_neighbors, logvar_clip=6.0, mu_clip=14.0,
+        num_time_steps, noise_start, noise_end, cutoff, num_node, max_num_neighbors, logvar_clip=6.0, mu_clip=14.0,
         use_gpu=True, lattice_scale=True, pred_prop=False, use_multi_latent=False, coord_loss_type='per_node', score_norm=None, use_node_num_loss=True, property_dim=21, backbone_name='spherenet',):
 
         super(MatGen, self).__init__()
@@ -45,7 +45,7 @@ class MatGen(torch.nn.Module):
             self.fc_node_num = build_mlp(latent_dim, fc_hidden_dim, num_fc_hidden_layers, max_num_atoms-min_num_atoms+1)
 
         self.coordgen = CoordGen(dec_backbone_params, latent_dim, num_fc_hidden_layers, fc_hidden_dim, num_time_steps,
-            noise_start, noise_end, cutoff, max_num_neighbors, loss_type=coord_loss_type, use_gpu=use_gpu, score_norm=score_norm, property_loss=pred_prop, backbone_name=backbone_name)
+            noise_start, noise_end, cutoff, max_num_neighbors, num_node, loss_type=coord_loss_type, use_gpu=use_gpu, score_norm=score_norm, property_loss=pred_prop, backbone_name=backbone_name)
 
         self.cutoff = cutoff
 
@@ -145,21 +145,22 @@ class MatGen(torch.nn.Module):
 
 
     def forward(self, data_batch, temp=[0.5, 0.5, 0.5, 0.01], eval=False, distance_reg=0.1):
-
+        #print(data_batch.cart_coords.shape)
         loss_dict = {}
-        mu, log_var, mu_lattice, log_var_lattice, latent_node_num, latent_pos, latent_lattice, latent_prop = self.encode(data_batch, temp)
+        #mu, log_var, mu_lattice, log_var_lattice, latent_node_num, latent_pos, latent_lattice, latent_prop = self.encode(data_batch, temp)
         
 
         # TODO: how to revise element type
         if self.use_node_num_loss:
-            pred_node_num_prob = self.fc_node_num(latent_node_num) # [256, 50]
-            pred_node_num = pred_node_num_prob.argmax(dim=-1) + self.min_num_atoms # [256]
+            pass
+            #pred_node_num_prob = self.fc_node_num(latent_node_num) # [256, 50]
+            #pred_node_num = pred_node_num_prob.argmax(dim=-1) + self.min_num_atoms # [256]
             # print(pred_node_num, data_batch.num_atoms)
-            target_num_atoms = F.one_hot(data_batch.num_atoms - self.min_num_atoms, num_classes=pred_node_num_prob.shape[1]).float()
-            node_num_loss = F.binary_cross_entropy_with_logits(pred_node_num_prob.view(-1), target_num_atoms.view(-1))
-            loss_dict['node_num_loss'] = node_num_loss
-            if eval:
-                loss_dict['node_num_loss']      = pred_node_num.eq(data_batch.num_atoms).sum().detach()
+            #target_num_atoms = F.one_hot(data_batch.num_atoms - self.min_num_atoms, num_classes=pred_node_num_prob.shape[1]).float()
+            #node_num_loss = F.binary_cross_entropy_with_logits(pred_node_num_prob.view(-1), target_num_atoms.view(-1))
+            #loss_dict['node_num_loss'] = node_num_loss
+            #if eval:
+                #loss_dict['node_num_loss']      = pred_node_num.eq(data_batch.num_atoms).sum().detach()
                 # loss_dict['total_elem_type_num_num']    = len(elem_type_num)
                 #
                 # loss_dict['total_elem_type_num']        = target_elem_type.shape[0] * target_elem_type.shape[1]
@@ -175,42 +176,44 @@ class MatGen(torch.nn.Module):
             loss_dict['node_num_loss'] = torch.tensor(0.0)
 
 
-        pred_lengths_angles = self.fc_lattice(latent_lattice)
+        #pred_lengths_angles = self.fc_lattice(latent_lattice)
 
-        loss_dict['kld_loss'] = torch.mean(-0.5 * torch.sum(1.0 + log_var - mu ** 2 - log_var.exp(), dim=1), dim=0) + \
-            torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)
-        if self.pred_prop:
+        #loss_dict['kld_loss'] = torch.mean(-0.5 * torch.sum(1.0 + log_var - mu ** 2 - log_var.exp(), dim=1), dim=0) + \
+        #    torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)
+        '''if self.pred_prop:
             pred_prop = self.fc_prop(latent_prop)
             target_y = data_batch.y
             if self.prop_normalizer is not None:
                 target_y = self.prop_normalizer.transform(target_y)
             loss_dict['property_loss'] = F.mse_loss(pred_prop.view(-1), target_y)
+        else:
+            loss_dict['property_loss'] = torch.tensor(0.0)'''
 
-        if self.use_multi_latent:
+        '''if self.use_multi_latent:
             loss_dict['kld_loss1'] = torch.mean(-0.5 * torch.sum(1.0 + log_var[:, :self.latent_dim] - mu[:, :self.latent_dim] ** 2 - log_var[:, :self.latent_dim].exp(), dim=1), dim=0)
             loss_dict['kld_loss2'] = torch.mean(-0.5 * torch.sum(1.0 + log_var[:, self.latent_dim:] - mu[:, self.latent_dim:] ** 2 - log_var[:, self.latent_dim:].exp(), dim=1), dim=0)
-            loss_dict['kld_loss3'] = torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)
+            loss_dict['kld_loss3'] = torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)'''
 
 
-        if self.lattice_scale:
+        '''if self.lattice_scale:
             num_atoms = data_batch.num_atoms
             lengths = data_batch.lengths
-            scaled_lengths= lengths / float(num_atoms)**(1/3)
+            scaled_lengths= lengths / (num_atoms.view(-1, 1).float())**(1/3)
             target_lengths_angles = torch.cat([scaled_lengths, data_batch.angles], dim=-1)
         else:
             target_lengths_angles = torch.cat([data_batch.lengths, data_batch.angles], dim=-1)
         if self.lattice_normalizer is not None:
             target_lengths_angles = self.lattice_normalizer.transform(target_lengths_angles)
-        loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)
+        loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)'''
 
-        loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(latent_pos, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,
+        loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(None, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,data_batch.cart_coords,
                                                 data_batch.lengths, data_batch.angles, data_batch.batch, None, None, None,
-                                                distance_reg=distance_reg, latent_prop=latent_prop)
+                                                distance_reg=distance_reg)
 
-        cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
-                                                data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
+        #cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
+        #                                        data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
 
-        target_edge = torch.zeros_like(edge_prob).view(-1)
+        '''target_edge = torch.zeros_like(edge_prob).view(-1)
         di, dj = data_batch.edge_index
         if (di > dj).sum() != (dj > di).sum():
             di = torch.cat([di,dj], dim=-1)
@@ -219,7 +222,7 @@ class MatGen(torch.nn.Module):
         find_idxa = (cut_idx[1,idxi[1]] == dj[idxi[0]]).nonzero().view(-1)
         target_edge[idxi[1,find_idxa]] = 1.0
         edge_loss = self.bce_loss(edge_prob.view(-1), target_edge)
-        loss_dict['edge_pred_loss'] = edge_loss
+        loss_dict['edge_pred_loss'] = edge_loss'''
 
         return loss_dict
     def bce_loss(self, pred, target, reduction='mean'):
@@ -299,6 +302,8 @@ class MatGen(torch.nn.Module):
         frac_coords, edge_index = self.coordgen.generate(latent_pos, num_atoms, atom_types, lengths, angles, coord_noise_start,
                                              coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, temperature[-1], coord_step_rate,threshold=threshold, latent_prop=latent_prop)
 
+        #print(frac_coords)
+        #input()
         return num_atoms, atom_types, lengths, angles, frac_coords, edge_index, prediected_prop
 
     @torch.no_grad()

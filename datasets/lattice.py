@@ -45,52 +45,11 @@ class Structure:
         self.properties = properties
         self.to_jimages = self.calculate_to_jimages_efficient(self.cart_coords.numpy(), self.edge_index.numpy(), self.lattice_vector.numpy())
 
-    @staticmethod
-    def remove_overlapping_nodes(conn, coord, tol=0.01):
-        tot_nodes = len(coord)
-        red_conn = conn
-        duplicate_nodes = []
-        for i in range(tot_nodes):
-            for j in range((i + 1), tot_nodes):
-                if np.linalg.norm(coord[i, :] - coord[j, :]) < tol:
-                    red_conn[red_conn == j] = i
-                    coord[j, :] = coord[i, :]
-                    duplicate_nodes.append(j)
 
-        if duplicate_nodes:
-            duplicate_nodes = np.unique(duplicate_nodes)
-            duplicate_nodes = np.sort(duplicate_nodes)[::-1]
-            for i in duplicate_nodes:
-                red_conn[red_conn > i] = red_conn[red_conn > i] - 1
-
-        # delete duplicate nodes and preserve order
-        _, idx = np.unique(coord, axis=0, return_index=True)
-        red_coord = coord[np.sort(idx)]
-
-        # delete duplicate connectivities
-        for i in range(len(red_conn)):
-            if red_conn[i, 0] > red_conn[i, 1]:
-                temp = red_conn[i, 1]
-                red_conn[i, 1] = red_conn[i, 0]
-                red_conn[i, 0] = temp
-
-        red_conn = np.unique(red_conn, axis=0)
-        red_conn = red_conn[red_conn[:,0] != red_conn[:,1]]
-
-        return torch.from_numpy(red_conn), torch.from_numpy(red_coord)    
 
     @staticmethod
     def calculate_to_jimages_efficient(coordinates, edge_index, lattice_vectors):
         """
-        高效计算to_jimages，基于笛卡尔坐标和晶格向量，利用线性代数方法并验证最短距离。
-
-        参数:
-        - coordinates: 形状为(num_atoms, 3)的二维数组，原子的笛卡尔坐标。
-        - edge_index: 形状为(2, num_edges)的二维数组，表示边的连接。
-        - lattice_vectors: 形状为(3, 3)的二维数组，晶格向量。
-
-        返回:
-        - to_jimages: 形状为(num_edges, 3)的二维数组，每行为对应边的to_jimages。
         """
 
         def find_images_and_correct_vector(vector, lattice_inv, lattice_vectors):
@@ -98,15 +57,13 @@ class Structure:
             corrected_vector = vector - np.dot(images, lattice_vectors)
             return images.astype(int), corrected_vector
 
-        # 计算晶格向量的逆矩阵
         lattice_inv = np.linalg.inv(lattice_vectors)
 
         num_edges = edge_index.shape[1]
         to_jimages = np.zeros((num_edges, 3), dtype=int)
 
-        # 对于每条边
         for idx, (i, j) in enumerate(edge_index.T):
-            vector_ij = coordinates[j] - coordinates[i]  # 原始距离向量
+            vector_ij = coordinates[j] - coordinates[i]
             jimages, corrected_vector = find_images_and_correct_vector(vector_ij, lattice_inv, lattice_vectors)
 
             to_jimages[idx] = jimages
@@ -169,7 +126,6 @@ class Structure:
         beta = torch.acos(dot_ac / (lengths[0] * lengths[2]))
         gamma = torch.acos(dot_bc / (lengths[0] * lengths[1]))
 
-        # 将弧度转换为度
         angles = torch.tensor([alpha * 180 / torch.pi, beta * 180 / torch.pi, gamma * 180 / torch.pi])
 
         return torch.stack(lengths), angles
@@ -249,12 +205,7 @@ class Structure:
 
     @staticmethod
     def correct_frac_coords(frac_coords, batch):
-        new_frac_coords = frac_coords + 0.5
-        # exclude the nodes on edge, corner, or face of the lattice
-        out_cell_mask = (new_frac_coords > 1.) | (new_frac_coords < 0.)
-        new_frac_coords[out_cell_mask] = new_frac_coords[out_cell_mask] % 1.
-
-        new_frac_coords = new_frac_coords - 0.5
+        new_frac_coords = (frac_coords + 0.5) % 1. - 0.5
         min_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='min')
         max_frac_coords = scatter(new_frac_coords, batch, dim=0, reduce='max')
         offset_frac_coords = (min_frac_coords + max_frac_coords) / 2.0

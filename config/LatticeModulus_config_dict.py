@@ -21,8 +21,8 @@ conf_enc_spherenet['num_spherical'] = 7
 conf_enc_spherenet['num_radial'] = 6
 
 
-conf_enc_nequip['n_elems'] = 1
-conf_enc_nequip['conv_feature_size'] = 32
+conf_enc_nequip['n_elems'] = 100
+conf_enc_nequip['conv_feature_size'] = 128
 conf_enc_nequip['parity'] = True
 conf_enc_nequip['lmax'] = 1
 conf_enc_nequip['cutoff'] = 1.5

@@ -106,7 +106,7 @@ def correct_cart_coords(cart_coords, lengths, angles, num_atoms, batch):
 
     frac_coords = torch.einsum('bi,bij->bj', cart_coords, inv_lattice_nodes)
     frac_coords = correct_frac_coords(frac_coords, batch)
-    
+
     cart_coords = torch.einsum('bi,bij->bj', frac_coords, lattice_nodes)  # cart coords
     return cart_coords
 
