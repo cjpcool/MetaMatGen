@@ -10,6 +10,7 @@ from torch_scatter import scatter
 from math import sqrt
 
 from .features import dist_emb, angle_emb, torsion_emb
+from .transformer_backbone import Encoder
 
 
 try:
@@ -215,7 +216,6 @@ class update_v(torch.nn.Module):
         v = self.lin(v)
         return v
 
-
 class update_u(torch.nn.Module):
     def __init__(self):
         super(update_u, self).__init__()
@@ -231,3 +231,107 @@ def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
         mods += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
     mods += [nn.Linear(hidden_dim, out_dim)]
     return nn.Sequential(*mods)
+
+'''class transformer(torch.nn.Module):
+    def __init__(self,d_model,n_head,ffn_hidden,n_layers,drop_prob):
+        super(transformer, self).__init__()
+        self.lin1 = nn.Linear(3,d_model)
+        self.encoder = Encoder(d_model, ffn_hidden, n_head, n_layers, drop_prob)
+        self.lin2 = nn.Linear(d_model,3)
+        #self.num_node = num_node
+        self.d_model = d_model
+
+    def forward(self,x):
+        x0 = self.lin1(x.view(x.shape[0],-1,3))
+        x1 = self.encoder(x0)
+        x2 = self.lin2(x1)
+        return x2.view(x.shape[0],-1)'''
+    
+class transformer(torch.nn.Module):
+    def __init__(self,num_node,d_model,n_head,ffn_hidden,n_layers,drop_prob):
+        super(transformer, self).__init__()
+        self.lin1 = nn.Linear(num_node*3,num_node*d_model)
+        self.encoder = Encoder(d_model, ffn_hidden, n_head, n_layers, drop_prob)
+        self.lin2 = nn.Linear(d_model,3)
+        #self.num_node = num_node
+        self.d_model = d_model
+
+    def forward(self,x):
+        x0 = self.lin1(x)
+        x1 = self.encoder(x0.view(x0.shape[0],-1,self.d_model))
+        x2 = self.lin2(x1)
+        return x2.view(x.shape[0],-1)
+
+class res_mlp(torch.nn.Module):
+    def __init__(self,num_node):
+        super(res_mlp, self).__init__()
+        hidden = 128
+        self.lin1 = nn.Linear(num_node*3,hidden)
+        #self.lin1 = nn.Linear((num_node-4)*3,hidden)
+        self.lin2 = nn.Linear(hidden,hidden)
+        self.lin3 = nn.Linear(hidden,hidden)
+        self.lin4 = nn.Linear(hidden,hidden)
+        self.lin5 = nn.Linear(hidden,hidden)
+        self.lin6 = nn.Linear(hidden,hidden)
+        self.lin7 = nn.Linear(hidden,num_node*3)
+        #self.lin7 = nn.Linear(hidden,(num_node-4)*3)
+        
+    def forward(self,x):
+        x0 = self.lin1(x)
+        x1 = nn.ReLU()(x0)
+        x2 = self.lin2(x1)
+        x3 = nn.ReLU()(x2)
+        x4 = x2 + x3
+        x5 = self.lin3(x4)
+        x6 = nn.ReLU()(x5)
+        x7 = x5 + x6
+        x8 = self.lin4(x7)
+        x9 = nn.ReLU()(x8)
+        x10 = x8 + x9
+        x11 = self.lin5(x10)
+        x12 = nn.ReLU()(x11)
+        x12 = x10 + x11
+        x13 = self.lin6(x12)
+        x14 = nn.ReLU()(x13)
+        x15 = x13 + x14
+        x16 = self.lin7(x15)
+        return x16
+
+class aggregate_to_node(torch.nn.Module):
+    def __init__(self, hidden_channels, out_emb_channels, out_channels, num_output_layers, act=swish, output_init='GlorotOrthogonal'):
+        super(aggregate_to_node, self).__init__()
+        self.act = act
+        self.output_init = output_init
+
+        self.lin_input = nn.Linear(hidden_channels, out_emb_channels, bias=True)
+        self.lins = torch.nn.ModuleList()
+        for _ in range(num_output_layers):
+            self.lins.append(nn.Linear(out_emb_channels, out_emb_channels))
+        self.lin = nn.Linear(out_emb_channels, out_channels, bias=False)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        glorot_orthogonal(self.lin_input.weight, scale=2.0)
+        for lin in self.lins:
+            glorot_orthogonal(lin.weight, scale=2.0)
+            lin.bias.data.fill_(0)
+        if self.output_init == 'zeros':
+            self.lin.weight.data.fill_(0)
+        if self.output_init == 'GlorotOrthogonal':
+            glorot_orthogonal(self.lin.weight, scale=2.0)
+
+    def forward(self, e, i, dist_vec, node_num=None):
+        e = self.lin_input(e)
+        for lin in self.lins:
+            e = self.act(lin(e))
+        e = self.lin(e)
+        e = e * (dist_vec / torch.norm(dist_vec, dim=1, keepdim=True))
+
+        if node_num is not None:
+            v = scatter(e, i, dim=0, dim_size=node_num, reduce='add')
+        else:
+            v = scatter(e, i, dim=0, reduce='add')
+
+
+        return v

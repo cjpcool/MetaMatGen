@@ -5,7 +5,7 @@ from e3nn.util import jit
 from model.Nequip.layers import embedding as e
 from model.Nequip.layers import AtomwiseLinear
 from model.Nequip.layers import ConvNetLayer, InteractionBlock
-from utils import calculate_to_jimages_efficient, get_pbc_distances
+from utils import calculate_to_jimages_efficient, get_pbc_distances, get_pbc_cutoff_graphs, correct_cart_coords
 
 
 class NequipEncoder(torch.nn.Module):
@@ -100,6 +100,10 @@ class NequipEncoder(torch.nn.Module):
             to_jimages = batch_data.to_jimages
         else:
             to_jimages = calculate_to_jimages_efficient(cart_coords, edge_index, batch_data.lattice_vectors, num_bonds)
+
+        # cart_coords = correct_cart_coords(cart_coords, lattice_lengths, lattice_angles, num_atoms, batch)
+        # edge_index, distance_vectors, pbc_offset = get_pbc_cutoff_graphs(cart_coords, lattice_lengths, lattice_angles,
+        #                                                                   num_atoms, 2.0,9)
 
         _, _, pbc_offset = get_pbc_distances(cart_coords, edge_index, lattice_lengths, lattice_angles,
                                                    to_jimages, num_atoms, num_bonds, coord_is_cart=True)

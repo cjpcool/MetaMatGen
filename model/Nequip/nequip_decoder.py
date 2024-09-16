@@ -95,7 +95,7 @@ class NequipDecoder(torch.nn.Module):
              range(lmax + 1)])
         invariant_neurons = radial_network_hidden_dim
         invariant_layers = radial_network_layers
-        average_num_neigh =average_num_neigh
+        average_num_neigh = average_num_neigh
         conv_kw = {"invariant_layers": invariant_layers, "invariant_neurons": invariant_neurons,
                    "avg_num_neighbors": average_num_neigh}
 
