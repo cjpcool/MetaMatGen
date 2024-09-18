@@ -6,7 +6,7 @@ from torch_scatter import scatter
 from .spherenet import SphereNetEncoder
 from .Nequip.nequip_encoder import NequipEncoder
 from .modules import build_mlp
-from .coordgen_0 import CoordGen
+from .coordgen import CoordGen
 
 
 class MatGen(torch.nn.Module):
