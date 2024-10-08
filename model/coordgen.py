@@ -11,7 +11,7 @@ from traitlets import Int
 
 from .spherenet_light import SphereNetLightDecoder
 from .Nequip.nequip_decoder import NequipDecoder
-from .modules import build_mlp, aggregate_to_node, res_mlp, transformer
+from .modules import build_mlp, aggregate_to_node, res_mlp, transformer, transformer_cond
 import sys
 sys.path.append("..")
 from utils import get_pbc_cutoff_graphs, frac_to_cart_coords, cart_to_frac_coords, correct_cart_coords, \
@@ -38,7 +38,7 @@ class CoordGen(torch.nn.Module):
         #self.fc_score = build_mlp(latent_dim + backbone_params['hidden_channels']+ property_dim, fc_hidden_dim, num_fc_hidden_layers, 1) #ini
         #self.fc_score = build_mlp(45,150,2,45) #ric
         #self.fc_score = res_mlp(num_node)
-        self.fc_score = transformer(num_node=num_node,d_model=128,n_head=8,ffn_hidden=128,n_layers=3,drop_prob=0.1)
+        self.fc_score = transformer_cond(num_node=num_node,d_model=128,n_head=8,ffn_hidden=128,n_layers=3,drop_prob=0.1)
         # self.fc_score = aggregate_to_node(latent_dim + backbone_params['hidden_channels']+ property_dim, fc_hidden_dim, 3, num_fc_hidden_layers)
         if backbone_name == 'spherenet':
             self.edge_pred = SphereNetLightDecoder(**backbone_params)
