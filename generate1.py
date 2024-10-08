@@ -55,9 +55,9 @@ if __name__ == '__main__':
     runner = Runner(conf, score_norm_path)
     runner.model.load_state_dict(torch.load(args.model_path))
     dataset = runner.load_data(data_path, args.dataset)
+    cond = torch.tensor(np.genfromtxt('ys.csv',delimiter=',')).to('cuda:0').float()
 
-
-    gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.generate(args.num_gen, None, coord_num_langevin_steps=100)
+    gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.generate(args.num_gen, None, coord_num_langevin_steps=100, cond=cond)
     #print(gen_frac_coords_list)
     #input()    
     if not os.path.exists(args.save_mat_path):
