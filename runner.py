@@ -131,8 +131,15 @@ class Runner():
             else:
                 dataset = LatticeStiffness(data_path, file_name=file_name)
                 
-        #print(dataset[0])
-        #input()
+        #codes to sample some conditions as input
+        '''num_gen = 100
+        ys = np.zeros((num_gen,len(dataset[0]['y'])))
+        for i in range(num_gen):
+            ind = np.random.randint(0, len(dataset))
+            ys[i] = np.array(dataset[ind]['y'])
+        np.savetxt('ys.csv', ys, delimiter=',')
+        print('finished saving y')
+        input()'''
         split_idx = dataset.get_idx_split(len(dataset), train_size=self.conf['train_size'], valid_size=self.conf['valid_size'], seed=self.conf['seed'])
         self.train_dataset, self.valid_dataset, self.test_dataset = dataset[split_idx['train']], dataset[split_idx['valid']], dataset[split_idx['test']]
 
@@ -288,7 +295,7 @@ class Runner():
                     total_dist_reg_loss/ iter_num, total_property_loss / iter_num, total_pbc_sym_reg_loss / iter_num)
 
 
-    def generate(self, num_gen, data_path, coord_num_langevin_steps=100, coord_step_rate=1e-4, threshold=0.6):
+    def generate(self, num_gen, data_path, coord_num_langevin_steps=100, coord_step_rate=1e-4, threshold=0.6, cond=None):
         dataset = self.train_dataset
         normalizer = self._get_normalizer(dataset)
         self.model.lattice_normalizer = normalizer
@@ -317,9 +324,9 @@ class Runner():
         self.model.eval()
         while num_remain > 0:
             if num_remain > one_time_gen:
-                mat_arrays = self.model.generate(one_time_gen, temperature, coord_noise_start, coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, coord_step_rate,None, min_num_atom, max_num_atom, threshold=threshold)
+                mat_arrays = self.model.generate(one_time_gen, temperature, coord_noise_start, coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, coord_step_rate,None, min_num_atom, max_num_atom, threshold=threshold, cond=cond)
             else:
-                mat_arrays = self.model.generate(num_remain, temperature, coord_noise_start, coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, coord_step_rate,None, min_num_atom, max_num_atom, threshold=threshold)
+                mat_arrays = self.model.generate(num_remain, temperature, coord_noise_start, coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, coord_step_rate,None, min_num_atom, max_num_atom, threshold=threshold, cond=cond)
             
             num_atoms_list.append(mat_arrays[0].detach().cpu())
             atom_types_list.append(mat_arrays[1].detach().cpu())
