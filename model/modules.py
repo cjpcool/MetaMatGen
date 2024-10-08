@@ -10,7 +10,7 @@ from torch_scatter import scatter
 from math import sqrt
 
 from .features import dist_emb, angle_emb, torsion_emb
-from .transformer_backbone import Encoder
+from .transformer_backbone import Encoder, Encoder_cond
 
 
 try:
@@ -259,6 +259,21 @@ class transformer(torch.nn.Module):
     def forward(self,x):
         x0 = self.lin1(x)
         x1 = self.encoder(x0.view(x0.shape[0],-1,self.d_model))
+        x2 = self.lin2(x1)
+        return x2.view(x.shape[0],-1)
+
+class transformer_cond(torch.nn.Module):
+    def __init__(self,num_node,d_model,n_head,ffn_hidden,n_layers,drop_prob):
+        super(transformer_cond, self).__init__()
+        self.lin1 = nn.Linear(num_node*3,num_node*d_model)
+        self.encoder = Encoder_cond(d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node)
+        self.lin2 = nn.Linear(d_model,3)
+        #self.num_node = num_node
+        self.d_model = d_model
+
+    def forward(self,x,cond):
+        x0 = self.lin1(x)
+        x1 = self.encoder(x0.view(x0.shape[0],-1,self.d_model),cond=cond)
         x2 = self.lin2(x1)
         return x2.view(x.shape[0],-1)
 
