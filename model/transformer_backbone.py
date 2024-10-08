@@ -173,6 +173,57 @@ class Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x)
         return x
+
+class EncoderLayer_cond(nn.Module):
+
+    def __init__(self, d_model, ffn_hidden, n_head, drop_prob, num_node):
+        super(EncoderLayer_cond, self).__init__()
+        self.d_model = d_model
+        self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
+        self.norm1 = LayerNorm(d_model=d_model)
+        self.dropout1 = nn.Dropout(p=drop_prob)
+
+        self.ffn = PositionwiseFeedForward(d_model=d_model, hidden=ffn_hidden, drop_prob=drop_prob)
+        self.norm2 = LayerNorm(d_model=d_model)
+        self.dropout2 = nn.Dropout(p=drop_prob)
+
+        self.lin1 = nn.Linear(21,d_model*num_node)
+
+    def forward(self, x, cond):
+        # 1. compute self attention
+        _x = x
+        #x = self.attention(q=self.lin1(cond.unsqueeze(dim=1)), k=x, v=x)
+        x = self.attention(q=self.lin1(cond).view(cond.shape[0],-1,self.d_model), k=x, v=x)
+        #print(cond.shape)
+        # 2. add and norm
+        x = self.dropout1(x)
+        #print(x.shape)
+        #print(_x.shape)
+        #input()
+        x = self.norm1(x + _x)
         
-        
+        # 3. positionwise feed forward network
+        _x = x
+        x = self.ffn(x)
+      
+        # 4. add and norm
+        x = self.dropout2(x)
+        x = self.norm2(x + _x)
+        return x
+
+class Encoder_cond(nn.Module):
+
+    def __init__(self, d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node):
+        super().__init__()
+        self.layers = nn.ModuleList([EncoderLayer_cond(d_model=d_model,
+                                                  ffn_hidden=ffn_hidden,
+                                                  n_head=n_head,
+                                                  drop_prob=drop_prob,
+                                                  num_node=num_node)
+                                     for _ in range(n_layers)])
+
+    def forward(self, x, cond):
+        for layer in self.layers:
+            x = layer(x, cond)
+        return x
         
