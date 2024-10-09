@@ -128,5 +128,5 @@ conf['gen_temp'] = [1., 1., 0.01, 1., 0.01]  # comp/node_num, pos, prop, lattice
 conf['val_temp'] = [1., 1., 1.0, 1.0]   # comp/node_num, pos, prop, lattice
 # conf['loss_thre'] = [3.0, 10.0]
 
-conf['max_atom_num'] = 50
-conf['min_atom_num'] = 7
+conf['max_atom_num'] = 47
+conf['min_atom_num'] = 47

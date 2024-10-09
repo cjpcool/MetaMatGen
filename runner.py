@@ -137,6 +137,7 @@ class Runner():
         split_idx = dataset.get_idx_split(len(dataset), train_size=self.conf['train_size'], valid_size=self.conf['valid_size'], seed=self.conf['seed'])
         self.train_dataset, self.valid_dataset, self.test_dataset = dataset[split_idx['train']], dataset[split_idx['valid']], dataset[split_idx['test']]
 
+
     def train(self, data_path, val_data_path, out_path, load_model_path=None):
         torch.nn.init.constant_(self.model.fc_var.weight, 1e-10)
         torch.nn.init.constant_(self.model.fc_var.bias, 0.)

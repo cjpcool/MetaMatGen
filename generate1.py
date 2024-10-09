@@ -7,11 +7,11 @@ from runner import Runner
 # from utils import smact_validity, compute_elem_type_num_wdist, get_structure, compute_density_wdist, structure_validity
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', default='./result_15_node_transformer_02/model_1359.pth', type=str, help='The directory for storing training outputs')
+    parser.add_argument('--model_path', default='./result_47/model_999.pth', type=str, help='The directory for storing training outputs')
     # parser.add_argument('--dataset', type=str, default='perov_5', help='Dataset name, must be perov_5, carbon_24, or mp_20')
     parser.add_argument('--dataset', type=str, default='LatticeStiffness', help='Dataset name, must be perov_5, carbon_24, or mp_20, LatticeModulus, LatticeStiffness')
     parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='The directory for storing training outputs')
-    parser.add_argument('--save_mat_path', type=str, default='generated_mat/15node', help='The directory for storing training outputs')
+    parser.add_argument('--save_mat_path', type=str, default='generated_mat/47node', help='The directory for storing training outputs')
 
     parser.add_argument('--num_gen', type=int, default=20, help='Number of materials to generate')
 
@@ -51,22 +51,22 @@ if __name__ == '__main__':
         score_norm_path = None
 
 
-
+    print('loading model...')
     runner = Runner(conf, score_norm_path)
     runner.model.load_state_dict(torch.load(args.model_path))
-    dataset = runner.load_data(data_path, args.dataset, file_name='training_node_num9')
+    print('loading data...')
+    runner.load_data(data_path, args.dataset, file_name='training_node_num9')
     # codes to sample some conditions as input
 
-    '''num_gen = args.num_gen
-    ys = np.zeros((num_gen, len(dataset[0]['y'])))
+    num_gen = args.num_gen
+    ys = np.zeros((num_gen, len(runner.train_dataset[0]['y'])))
     for i in range(num_gen):
-        ind = np.random.randint(0, len(dataset))
-        ys[i] = np.array(dataset[ind]['y'])
-    np.savetxt('ys.csv', ys, delimiter=',')
-    print('finished saving y')
-    input()'''
+        ind = np.random.randint(0, len(runner.train_dataset))
+        ys[i] = np.array(runner.train_dataset[ind]['y'])
+    # np.savetxt('ys.csv', ys, delimiter=',')
+    # print('finished saving y')
 
-    cond = torch.tensor(np.genfromtxt('ys.csv',delimiter=',')).to('cuda:0').float()
+    cond = torch.tensor(ys).to('cuda:0').float()
 
     gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, edge_index_list, prop_list = runner.generate(args.num_gen, None, coord_num_langevin_steps=100, cond=cond)
     print(edge_index_list)

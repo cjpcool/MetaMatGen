@@ -241,9 +241,7 @@ class CoordGen(torch.nn.Module):
 
 
     def predict_pos_score(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigma, threshold=0.6, latent_prop=None, edge_index=None, to_jimages=None, num_bonds=None, cond=None):
-        return self.fc_score(cart_coords, cond=cond)
-
-
+        return self.fc_score(self.backbone(cart_coords.view(-1, self.num_node*3), cond=cond))
 
 
 
@@ -263,7 +261,7 @@ class CoordGen(torch.nn.Module):
         batch = torch.repeat_interleave(torch.arange(num_of_samples_gen, device=num_atoms.device), self.num_node)
         #frac_coords_init = torch.rand(size=(batch.shape[0], 3), device=lengths.device) - 0.5
         #frac_coords_init = torch.rand(size=(angles.shape[0], 45), device=lengths.device) - 0.5
-        frac_coords_init = 5*(torch.rand((num_of_samples_gen,self.num_node*3),device='cuda') - 0.5)
+        frac_coords_init = 5*(torch.rand((num_of_samples_gen,self.num_node,3),device='cuda') - 0.5)
         
         #cart_coords_init = frac_to_cart_coords(frac_coords_init, lengths, angles, num_atoms)
         cart_coords_init = frac_coords_init

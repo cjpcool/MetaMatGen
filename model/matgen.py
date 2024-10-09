@@ -293,6 +293,7 @@ class MatGen(torch.nn.Module):
             atom_types = torch.repeat_interleave(atom_types, num_atoms, dim=0)
 
         num_atoms = torch.ones((num_gen,), dtype=torch.long ).to(latent_comp.device) * self.num_node
+        atom_types = torch.zeros((num_gen*self.num_node, 1), dtype=torch.long).to(latent_comp.device)
 
         lengths_angles = self.fc_lattice(latent_lattice)
         if self.lattice_normalizer is not None:
