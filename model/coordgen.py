@@ -226,9 +226,11 @@ class CoordGen(torch.nn.Module):
         #                                                                           self.max_num_neighbors)
         if not generate_mode:
             max_num_neighbors=5
+            radius=5
         else:
             max_num_neighbors=self.num_node
-        cut_off_edge_index = radius_graph(cart_coords, 5, batch=batch, loop=False, max_num_neighbors=max_num_neighbors)
+            radius=1.0
+        cut_off_edge_index = radius_graph(cart_coords, radius, batch=batch, loop=False, max_num_neighbors=max_num_neighbors)
         # distance_vectors = cart_coords[cut_off_edge_index[1]] - cart_coords[cut_off_edge_index[0]]
         batch_size = batch.shape[0]//self.num_node
         coords = cart_coords.view((batch_size,-1))

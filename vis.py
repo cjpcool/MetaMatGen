@@ -1,4 +1,6 @@
 import numpy as np
+from torch_cluster import radius, radius_graph
+
 from utils.lattice_utils import plot_lattice
 import os
 from utils.mat_utils import frac_to_cart_coords, get_pbc_cutoff_graphs
@@ -25,7 +27,7 @@ def plot_origin_lattice_from_path(path, name, cutoff=1.0,max_num_neighbors_thres
     plot_lattice(cart_coords,edge_index.T, save_dir=save_dir)
 
 
-def plot_lattice_from_path(path, name, cutoff=1.0,max_num_neighbors_threshold=3, save_dir=None ):
+def plot_lattice_from_path(path, name, cutoff=2.0,max_num_neighbors_threshold=5, save_dir=None ):
     full_path = os.path.join(path,name)
     lattice_npz = np.load(full_path)
     frac_coords = lattice_npz['frac_coords']
@@ -43,7 +45,7 @@ def plot_lattice_from_path(path, name, cutoff=1.0,max_num_neighbors_threshold=3,
         # raise Exception
         edge_index = lattice_npz['edge_index']
     except:
-        edge_index, _,_ = get_pbc_cutoff_graphs(cart_coords, lengths, angles, num_atoms, cutoff=cutoff, max_num_neighbors_threshold=max_num_neighbors_threshold)
+        edge_index, _,_ = radius_graph(cart_coords, cutoff, max_num_neighbors=max_num_neighbors_threshold)
     print('edge_index \n', edge_index)
     plot_lattice(cart_coords,edge_index.T, save_dir=save_dir)
 

@@ -4,6 +4,8 @@ import argparse
 import numpy as np
 import torch
 from runner import Runner
+from vis import plot_lattice_from_path
+
 # from utils import smact_validity, compute_elem_type_num_wdist, get_structure, compute_density_wdist, structure_validity
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -13,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='The directory for storing training outputs')
     parser.add_argument('--save_mat_path', type=str, default='generated_mat/47node', help='The directory for storing training outputs')
 
-    parser.add_argument('--num_gen', type=int, default=20, help='Number of materials to generate')
+    parser.add_argument('--num_gen', type=int, default=100, help='Number of materials to generate')
 
     args = parser.parse_args()
 
@@ -97,17 +99,12 @@ if __name__ == '__main__':
                 prop_list=prop_list[i]
                 )
 
-
-    # is_valid, validity = smact_validity(gen_atom_types_list)
-    # print("composition validity: {}".format(validity))
-    #
-    # elem_type_num_wdist = compute_elem_type_num_wdist(gen_atom_types_list, gt_atom_types_list)
-    # print("element EMD: {}".format(elem_type_num_wdist))
-    #
-    # gen_structure_list = get_structure(gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list)
-    #
-    # is_valid, structure_validity = structure_validity(gen_atom_types_list, gen_lengths_list, gen_angles_list, gen_frac_coords_list, gen_structure_list)
-    # print("structure validity: {}".format(structure_validity))
-    #
-    # density_wdist = compute_density_wdist(gen_structure_list, gt_structure_list)
-    # print("density EMD: {}".format(density_wdist))
+    print('Vis saving...')
+    path = args.save_mat_path
+    file_names = os.listdir(path)
+    save_path = './vis/generated_mat/47node'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    for file_name in file_names:
+        save_dir = os.path.join(save_path, file_name[:-3] + 'jpeg')
+        plot_lattice_from_path(path, file_name, save_dir=save_dir)
