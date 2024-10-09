@@ -207,8 +207,7 @@ class MatGen(torch.nn.Module):
         loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)'''
 
         loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(None, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,data_batch.cart_coords,
-                                                data_batch.lengths, data_batch.angles, data_batch.batch, None, None, None,
-                                                distance_reg=distance_reg)
+                                                data_batch.lengths, data_batch.angles, data_batch.batch, cond=data_batch.y.view(200,-1).unsqueeze(dim=1))
 
         cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
                                                data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
@@ -238,7 +237,7 @@ class MatGen(torch.nn.Module):
         return F.binary_cross_entropy(pred, target, weight=weight, reduction=reduction)
 
     @torch.no_grad()
-    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.6):
+    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.6,cond=None):
 
         if not self.use_multi_latent:
             if self.use_gpu:
@@ -303,7 +302,7 @@ class MatGen(torch.nn.Module):
             lengths = lengths * num_atoms.view(-1, 1).float()**(1/3)
         
         frac_coords, edge_index = self.coordgen.generate(latent_pos, num_atoms, atom_types, lengths, angles, coord_noise_start,
-                                             coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, temperature[-1], coord_step_rate,threshold=threshold, latent_prop=latent_prop)
+                                             coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, temperature[-1], coord_step_rate,threshold=threshold, latent_prop=latent_prop,cond=cond)
 
         #print(frac_coords)
         #input()

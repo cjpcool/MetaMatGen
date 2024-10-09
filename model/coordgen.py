@@ -11,7 +11,7 @@ from traitlets import Int
 
 from .spherenet_light import SphereNetLightDecoder
 from .Nequip.nequip_decoder import NequipDecoder
-from .modules import build_mlp, aggregate_to_node, res_mlp, transformer
+from .modules import build_mlp, aggregate_to_node, res_mlp, transformer, transformer_cond
 import sys
 sys.path.append("..")
 from utils import get_pbc_cutoff_graphs, frac_to_cart_coords, cart_to_frac_coords, correct_cart_coords, \
@@ -31,7 +31,7 @@ class CoordGen(torch.nn.Module):
         elif backbone_name == 'nequip':
             self.backbone = NequipDecoder(**backbone_params)
         elif backbone_name == 'transformer':
-            self.backbone = transformer(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
+            self.backbone = transformer_cond(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
                                         drop_prob=0.1)
 
         if not property_loss:
@@ -48,7 +48,7 @@ class CoordGen(torch.nn.Module):
         elif backbone_name == 'nequip':
             self.edge_pred = NequipDecoder(**backbone_params)
         elif backbone_name == 'transformer':
-            self.edge_pred = transformer(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
+            self.edge_pred = transformer_cond(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
                                         drop_prob=0.1)
 
         # TODO: fc_edge_lin not used in current version
@@ -173,7 +173,7 @@ class CoordGen(torch.nn.Module):
         return torch.cat([shrinked_coords,coords_to_add],dim=1)
 
 
-    def forward(self, latents, num_atoms, atom_types, gt_frac_coords, gt_cart_coords, lengths, angles, batch, edge_index=None, to_jimages=None, num_bonds=None, distance_reg=None, latent_prop=None):
+    def forward(self, latents, num_atoms, atom_types, gt_frac_coords, gt_cart_coords, lengths, angles, batch, edge_index=None, to_jimages=None, num_bonds=None, distance_reg=None, latent_prop=None, cond=None):
         torch.set_printoptions(threshold=torch.inf)
         '''print(torch.max(gt_frac_coords[18:27]))
         print(gt_frac_coords[18:27])
@@ -181,8 +181,9 @@ class CoordGen(torch.nn.Module):
         input()'''
         #print(gt_cart_coords.shape)
         #print(gt_cart_coords)
-        batch_size = batch.shape[0]//self.num_node
         num_graphs = batch[-1].item() + 1
+        batch_size = num_graphs
+        assert batch_size.shape[0] // num_graphs == self.num_node, 'args num_node is inconsistent with input data'
         time_steps = torch.randint(0, self.num_time_steps, size=(num_graphs,), device='cuda')
         #new_batch = batch.view(batch_size,-1)[:,:5]
         #new_batch = new_batch.reshape((-1,))
@@ -204,31 +205,8 @@ class CoordGen(torch.nn.Module):
         #cart_coords_perturbed = correct_cart_coords(cart_coords_perturbed, lengths, angles, num_atoms, batch) #本来有
         #ric
         cart_coords_perturbed = cart_coords_perturbed.reshape((batch_size,-1))
-        fc_score = self.fc_score(self.backbone(cart_coords_perturbed)).view(batch_size,-1)
-        score_loss = F.mse_loss(fc_score,-cart_coords_noise.view(batch_size,-1))
-        
-        '''
-        # compute predicted distances
-        dist_reg_loss =torch.scalar_tensor(0.)
-        # if distance_reg is not None and distance_reg > 0:
-        #     predicted_dist = perturb_dists_per_multi_edge + torch.linalg.norm(scores_per_multi_edge, dim=-1, keepdim=True) / score_norms_per_multi_edge
-        #     predicted_dist = scatter(predicted_dist, multi_edge_to_edge_idx, dim=0, reduce='mean')
-        #     dist_reg_loss = (distance_reg - torch.clamp(predicted_dist, min=0., max=distance_reg)).sum()
-        pbs_sym_reg_loss = torch.scalar_tensor(0.)
-        pbc_sym_reg=False
-        # if pbc_sym_reg:
-        #     cart_coords_preds = cart_coords_perturbed + scores_per_node_pos / score_norms_per_node
-        #     dist_vec_to_center = self._center_coords(cart_coords_preds, batch)
-        #     x_max = dist_vec_to_center[:, 0].max()
-        #     x_min = dist_vec_to_center[:, 0].min()
-        #     y_max = dist_vec_to_center[:, 1].max()
-        #     y_min = dist_vec_to_center[:, 1].min()
-        #     z_max = dist_vec_to_center[:, 2].max()
-        #     z_min = dist_vec_to_center[:, 2].min()
-        #     pbs_sym_reg_loss = torch.mean(torch.abs(x_max + x_min) + torch.abs(y_max + y_min) + torch.abs(z_max + z_min))
-
-        # score_loss, dist_reg_loss, pbs_sym_reg_loss = torch.nan_to_num(score_loss,0.0), torch.nan_to_num(dist_reg_loss,0.0), torch.nan_to_num(pbs_sym_reg_loss,0.0)'''
-
+        fc_score = self.fc_score(self.backbone(cart_coords_perturbed, cond))
+        score_loss = F.mse_loss(fc_score,-cart_coords_noise.reshape((batch_size,-1)))
         #return score_loss, dist_reg_loss, pbs_sym_reg_loss
         return score_loss, 0.0, 0.0
 
@@ -259,55 +237,17 @@ class CoordGen(torch.nn.Module):
         return cut_off_edge_index, edge_prob
 
 
-    def predict_pos_score(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigma, threshold=0.6, latent_prop=None, edge_index=None, to_jimages=None, num_bonds=None):
-        #ric
-        return self.fc_score(self.backbone(cart_coords)).view(batch.max()+1,-1)
-        
-        if edge_index is not None and to_jimages is not None and num_bonds is not None:
-            _, distance_vectors, _ = get_pbc_distances(cart_coords, edge_index, lengths, angles, to_jimages, num_atoms, num_bonds, True)
-        else:
-            edge_index, distance_vectors, pbc_offsets = get_pbc_cutoff_graphs(cart_coords, lengths, angles,num_atoms, self.cutoff,self.max_num_neighbors)
+    def predict_pos_score(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigma, threshold=0.6, latent_prop=None, edge_index=None, to_jimages=None, num_bonds=None, cond=None):
+        return self.fc_score(cart_coords, cond=cond)
 
-        num_graphs = batch[-1].item() + 1
 
-        edge_features = self.backbone(atom_types, edge_index, distance_vectors)
-        num_multi_edge_per_graph = scatter(torch.ones(size=(edge_index.shape[1],), device=edge_index.device).long(), batch[edge_index[0]], reduce='sum')
-        latents_per_multi_edge = latents.repeat_interleave(num_multi_edge_per_graph, dim=0)
-        edge_features = torch.cat((edge_features, latents_per_multi_edge), dim=1)
-        if self.property_loss and latent_prop is not None:
-            latent_prop_per_multi_edge = latent_prop.repeat_interleave(num_multi_edge_per_graph, dim=0)
-            edge_features = torch.cat((edge_features, latent_prop_per_multi_edge), dim=1)
-
-        j, i = edge_index
-        no_iden_mask = (i != j)
-        j, i, edge_features, distance_vectors = j[no_iden_mask], i[no_iden_mask], edge_features[no_iden_mask], distance_vectors[no_iden_mask]
-        dists_per_multi_edge = torch.linalg.norm(distance_vectors, dim=-1, keepdim=True)
-        scores_per_multi_edge = self.fc_score(edge_features) * distance_vectors / dists_per_multi_edge
-        # scores_per_node_pos =  self.fc_score(edge_features,i, distance_vectors, atom_types.shape[0])
-        # scores_per_node_pos = scatter(scores_per_multi_edge, i, dim_size=batch.shape[0], dim=0, reduce='add')
-
-        num_multi_edges = len(i)
-        new_edge_start_mask = torch.logical_or(i[:-1] != i[1:], j[:-1] != j[1:])
-        new_edge_start_id = torch.nonzero(new_edge_start_mask).view(-1) + 1
-        num_multi_edges_per_edge = torch.cat([new_edge_start_id[0:1], new_edge_start_id[1:] - new_edge_start_id[:-1], num_multi_edges - new_edge_start_id[-1:]])
-        multi_edge_to_edge_idx = torch.repeat_interleave(torch.arange(len(num_multi_edges_per_edge), device=num_multi_edges_per_edge.device), num_multi_edges_per_edge)
-        scores_per_edge = scatter(scores_per_multi_edge, multi_edge_to_edge_idx, dim=0, reduce='mean')
-        unique_edge_receiver_index = scatter(i, multi_edge_to_edge_idx, dim=0, reduce='mean').long()
-        scores_per_node_pos = scatter(scores_per_edge, unique_edge_receiver_index, dim=0, dim_size=len(batch), reduce='sum')
-
-        if self.score_norms is not None:
-            score_norm = self.get_score_norm(sigma)
-        else:
-            score_norm = sigma
-
-        return scores_per_node_pos / score_norm
 
 
 
     @torch.no_grad()
     def generate(self, latents, num_atoms, atom_types, lengths, angles, noise_start, noise_end, num_gen_steps=10,
                  num_langevin_steps=100, coord_temp=0.01, step_rate=1e-4, threshold=0.6, latent_prop=None, edge_index=None,
-                 to_jimages=None, num_bonds=None):
+                 to_jimages=None, num_bonds=None, cond=None):
         # log_sigmas = np.linspace(np.log(noise_start), np.log(noise_end), num_gen_steps)
         # sigmas = np.exp(log_sigmas)
         # sigmas = torch.from_numpy(sigmas).float()
@@ -332,7 +272,7 @@ class CoordGen(torch.nn.Module):
             #current_alpha = step_rate
             current_alpha = 0.000000008*(sigmas[t] / sigmas[1])**2
             for _ in range(num_langevin_steps):
-                scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds)
+                scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds, cond=cond)
                 #print('adfjkahsdfkj')
                 #print(current_alpha)
                 #print(scores_per_node_pos)
