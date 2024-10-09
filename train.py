@@ -10,7 +10,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = DEVICE_ID
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--result_path', type=str, default='result_19_node_transformer_02/', help='The directory for storing training outputs')
+    parser.add_argument('--result_path', type=str, default='result_47/', help='The directory for storing training outputs')
     parser.add_argument('--dataset', type=str, default='LatticeStiffness', help='Dataset name, must be perov_5, carbon_24, or mp_20, LatticeModulus, LatticeStiffness')
     # parser.add_argument('--data_path', type=str, default='D:\项目\Material design\code_data\data/', help='The directory for storing training outputs')
     parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='Data path')
@@ -58,6 +58,6 @@ if __name__ == '__main__':
 
 
     runner = Runner(conf, score_norm_path)
-    dataset = runner.load_data(data_path, args.dataset, file_name='training_node_num19')
+    dataset = runner.load_data(data_path, args.dataset, file_name='training_node_num47')
     # runner.train(train_data_path, val_data_path, result_path, load_model_path=args.load_model_path)
     runner.train(train_data_path, val_data_path, result_path)

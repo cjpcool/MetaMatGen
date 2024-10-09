@@ -183,7 +183,7 @@ class CoordGen(torch.nn.Module):
         #print(gt_cart_coords)
         num_graphs = batch[-1].item() + 1
         batch_size = num_graphs
-        assert batch_size.shape[0] // num_graphs == self.num_node, 'args num_node is inconsistent with input data'
+        assert batch.shape[0] // num_graphs == self.num_node, 'args num_node is inconsistent with input data'
         time_steps = torch.randint(0, self.num_time_steps, size=(num_graphs,), device='cuda')
         #new_batch = batch.view(batch_size,-1)[:,:5]
         #new_batch = new_batch.reshape((-1,))
@@ -206,7 +206,7 @@ class CoordGen(torch.nn.Module):
         #ric
         cart_coords_perturbed = cart_coords_perturbed.reshape((batch_size,-1))
         fc_score = self.fc_score(self.backbone(cart_coords_perturbed, cond))
-        score_loss = F.mse_loss(fc_score,-cart_coords_noise.reshape((batch_size,-1)))
+        score_loss = F.mse_loss(fc_score,-cart_coords_noise.reshape((batch_size,self.num_node,3)))
         #return score_loss, dist_reg_loss, pbs_sym_reg_loss
         return score_loss, 0.0, 0.0
 
@@ -219,17 +219,20 @@ class CoordGen(torch.nn.Module):
         return self.score_norms[sigma_index]
 
 
-    def predict_edge(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, latent_prop=None):
+    def predict_edge(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, latent_prop=None,cond=None, generate_mode=False):
         # cut_off_edge_index, distance_vectors, pbc_offsets = get_pbc_cutoff_graphs(cart_coords,
         #                                                                           lengths, angles,
         #                                                                           num_atoms, self.cutoff,
         #                                                                           self.max_num_neighbors)
-
-        cut_off_edge_index = radius_graph(cart_coords, 5, batch=batch, loop=False, max_num_neighbors=self.num_node)
+        if not generate_mode:
+            max_num_neighbors=5
+        else:
+            max_num_neighbors=self.num_node
+        cut_off_edge_index = radius_graph(cart_coords, 5, batch=batch, loop=False, max_num_neighbors=max_num_neighbors)
         # distance_vectors = cart_coords[cut_off_edge_index[1]] - cart_coords[cut_off_edge_index[0]]
         batch_size = batch.shape[0]//self.num_node
         coords = cart_coords.view((batch_size,-1))
-        node_emb = self.backbone(coords)
+        node_emb = self.backbone(coords,cond)
 
         node_emb = self.fc_edge_prob(node_emb).view(batch.shape[0], -1)
         edge_prob = self.binlin(node_emb[cut_off_edge_index[0]], node_emb[cut_off_edge_index[1]])
@@ -287,7 +290,7 @@ class CoordGen(torch.nn.Module):
         frac_coords = cart_coords.reshape((num_of_samples_gen,-1,3))
 
         if edge_index is None:
-            cutoff_ind, edge_prob = self.predict_edge(latents, num_atoms, atom_types, lengths, angles, frac_coords.reshape((-1,3)), batch, latent_prop=latent_prop)
+            cutoff_ind, edge_prob = self.predict_edge(latents, num_atoms, atom_types, lengths, angles, frac_coords.reshape((-1,3)), batch, latent_prop=latent_prop, cond=cond,generate_mode=True)
             edge_prob = edge_prob.view(-1)
             edge_index = cutoff_ind[:, edge_prob > threshold]
             edge_index = edge_index[:, edge_index[0] < edge_index[1]]

@@ -245,6 +245,7 @@ class Runner():
         total_edge_pred_loss = 0.0
         total_loss = 0
 
+
         with torch.no_grad():
             for iter_num, data_batch in enumerate(loader):
                 data_batch = data_batch.to('cuda')

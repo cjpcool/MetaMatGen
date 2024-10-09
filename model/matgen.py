@@ -207,10 +207,10 @@ class MatGen(torch.nn.Module):
         loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)'''
 
         loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(None, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,data_batch.cart_coords,
-                                                data_batch.lengths, data_batch.angles, data_batch.batch, cond=data_batch.y.view(200,-1).unsqueeze(dim=1))
+                                                data_batch.lengths, data_batch.angles, data_batch.batch, cond=data_batch.y)
 
         cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
-                                               data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
+                                               data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop,cond=data_batch.y)
 
         target_edge = torch.zeros_like(edge_prob).view(-1)
         di, dj = data_batch.edge_index
