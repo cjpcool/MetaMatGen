@@ -10,6 +10,7 @@ from torch_geometric.data import Data, InMemoryDataset
 from tqdm import tqdm
 
 from datasets.lattice import Structure
+from utils import lattice_params_to_matrix_torch
 from utils.lattice_utils import Topology, scale_to_cell
 import pickle
 
@@ -110,7 +111,7 @@ class LatticeModulus(InMemoryDataset):
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
                 vector=S1.lattice_vector.view(1,-1).to(torch.float32),
-                y=S1.properties.to(torch.float32),
+                y=S1.properties.to(torch.float32).view(1, -1),
                 to_jimages = S1.to_jimages
             )
 
@@ -234,7 +235,7 @@ class LatticeStiffness(InMemoryDataset):
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
                 vector=lattice_vector.to(torch.float32),
-                y=S1.properties.to(torch.float32),
+                y=S1.properties.to(torch.float32).view(1, -1),
                 to_jimages = S1.to_jimages
             )
             #print(data.cart_coords)
@@ -295,8 +296,34 @@ if __name__ == '__main__':
     from utils.lattice_utils import plot_lattice
 
     # dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
-    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training')
+    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
+    data_list = []
+    for i in tqdm(range(len(dataset))):
+        raw = dataset[i]
+        data = Data(
+            frac_coords=raw.frac_coords,
+            cart_coords=raw.cart_coords,
+            node_feat=raw.node_feat,
+            edge_feat=raw.edge_feat,
+            edge_index=raw.edge_index,
+            num_nodes=raw.num_nodes,
+            num_atoms=raw.num_nodes,
+            num_edges=raw.num_edges,
+            lengths=raw.lengths,
+            angles=raw.angles,
+            vector=lattice_params_to_matrix_torch(raw.lengths, raw.angles),
+            # property=raw.y,
+            y=raw.y.view(1,-1),
+            to_jimages=raw.to_jimages
+        )
+
+
+
+        data_list.append(data)
+    torch.save(InMemoryDataset.collate(data_list), '/home/jianpengc/datasets/metamaterial/LatticeStiffness/training_node_num47/processed/data.pt')
     # dataset = LatticeModulus('D:\项目\Material design\code_data\data\LatticeModulus', file_name='data')
+    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
+
     split_idx = dataset.get_idx_split(len(dataset), train_size=5, valid_size=5, seed=42)
     print(split_idx.keys())
     print(dataset[split_idx['train']])
@@ -305,7 +332,7 @@ if __name__ == '__main__':
     train_loader = DataLoader(dataset, batch_size=10, shuffle=True)
     print(dataset)
     data_batch = next(iter(train_loader))
-    print(data_batch)
+    print('Property shape: ',data_batch.y.shape)
     node_num_per_lattice = dataset.slices['node_feat'][1:] - dataset.slices['node_feat'][:-1]
     edge_num_per_lattice = dataset.num_edges
     print('max node num', max(node_num_per_lattice))
