@@ -52,6 +52,7 @@ class Runner():
             loss_dict = self.model(data_batch, temp=self.conf['train_temp'], distance_reg=self.conf['distance_reg'])
 
             coord_loss = loss_dict['coord_loss']
+            edge_pred_loss = loss_dict['edge_pred_loss']
             '''kld_loss, node_num_loss, lattice_loss, coord_loss = loss_dict['kld_loss'], loss_dict['node_num_loss'], loss_dict['lattice_loss'], loss_dict['coord_loss']
             edge_pred_loss = loss_dict['edge_pred_loss']
             dist_reg_loss = loss_dict['dist_reg_loss']
@@ -60,7 +61,7 @@ class Runner():
             #loss = self.conf['kld_weight'] * kld_loss + self.conf['node_num_loss_weight'] * node_num_loss \
             #    + self.conf['lattice_weight'] * lattice_loss + self.conf['coord_weight'] * coord_loss + self.conf['edge_pred_weight'] * edge_pred_loss + \
             #    self.conf['dist_reg_weight'] * dist_reg_loss + self.conf['property_weight'] * property_loss + self.conf['pbc_sym_reg_weight'] * pbc_sym_reg_loss
-            loss = self.conf['coord_weight'] * coord_loss
+            loss = self.conf['coord_weight'] * coord_loss + self.conf['edge_pred_weight'] * edge_pred_loss
             
             # if epoch > 10 and (loss < 0.1 or loss > 100):
             #     self.optimizer.zero_grad()
@@ -76,8 +77,8 @@ class Runner():
                         edge_pred_loss.item(), dist_reg_loss, property_loss.item(), pbc_sym_reg_loss.item(),
                         node_num_loss.item()))'''
                 print(
-                    'NAN Loss in iter {} | loss coord {:.4f}'.format(
-                        iter_num,  coord_loss.to('cpu').item()))
+                    'NAN Loss in iter {} | loss coord {:.4f}, loss edge {:.4f}'.format(
+                        iter_num,  coord_loss.to('cpu').item(), edge_pred_loss.item()))
                 return None
 
             self.optimizer.zero_grad()
@@ -111,7 +112,9 @@ class Runner():
                 #     kld_loss1, kld_loss2, kld_loss3, elem_type_num_loss.to('cpu').item(), elem_type_loss.to('cpu').item(), elem_num_loss.to('cpu').item(), lattice_loss.to('cpu').item(), coord_loss.to('cpu').item()))
                 #print('Training iteration {} | loss kld {:.4f} kld1 {:.4f} kld2 {:.4f} kld3 {:.4f} lattice {:.4f} coord {:.4f}, edge {:4f}, min_dist_reg {:4f}, prop {:4f}, pbc_sym_reg_loss {:4f}, node_num_loss {:4f}'.format(iter_num, kld_loss.to('cpu').item(),
                 #    kld_loss1, kld_loss2, kld_loss3, lattice_loss.to('cpu').item(), coord_loss.to('cpu').item(), edge_pred_loss.item(), dist_reg_loss, property_loss.item(), pbc_sym_reg_loss.item(), node_num_loss.item()))
-                print('Training iteration {} | loss coord {:.4f}'.format(iter_num, coord_loss.to('cpu').item()))
+                print(
+                    'Training iteration {} | loss coord {:.4f}, loss edge {:.4f}'.format(
+                        iter_num, coord_loss.to('cpu').item(), edge_pred_loss.item()))
         iter_num += 1
         return (total_loss / iter_num, total_kld_loss / iter_num, total_kld_loss1 / iter_num, total_kld_loss2 / iter_num, total_kld_loss3 / iter_num, \
             total_node_num_loss / iter_num, total_lattice_loss / iter_num, total_coord_loss / iter_num, total_edge_pred_loss / iter_num, \
@@ -130,16 +133,7 @@ class Runner():
                 dataset = LatticeStiffness(data_path)
             else:
                 dataset = LatticeStiffness(data_path, file_name=file_name)
-                
-        #codes to sample some conditions as input
-        '''num_gen = 100
-        ys = np.zeros((num_gen,len(dataset[0]['y'])))
-        for i in range(num_gen):
-            ind = np.random.randint(0, len(dataset))
-            ys[i] = np.array(dataset[ind]['y'])
-        np.savetxt('ys.csv', ys, delimiter=',')
-        print('finished saving y')
-        input()'''
+
         split_idx = dataset.get_idx_split(len(dataset), train_size=self.conf['train_size'], valid_size=self.conf['valid_size'], seed=self.conf['seed'])
         self.train_dataset, self.valid_dataset, self.test_dataset = dataset[split_idx['train']], dataset[split_idx['valid']], dataset[split_idx['test']]
 
@@ -333,7 +327,7 @@ class Runner():
             lengths_list.append(mat_arrays[2].detach().cpu())
             angles_list.append(mat_arrays[3].detach().cpu())
             frac_coords_list.append(mat_arrays[4].detach().cpu())
-            #edge_index_list.append(mat_arrays[5].detach().cpu())
+            edge_index_list.append(mat_arrays[5].detach().cpu())
             prop_list.append(mat_arrays[6].detach().cpu())
 
 

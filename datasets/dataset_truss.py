@@ -109,6 +109,7 @@ class LatticeModulus(InMemoryDataset):
                 num_edges=edge_num,
                 lengths=S1.lattice_params[0].view(1, -1).to(torch.float32),
                 angles=S1.lattice_params[1].view(1, -1).to(torch.float32),
+                vector=S1.lattice_vector.view(1,-1).to(torch.float32),
                 y=S1.properties.to(torch.float32),
                 to_jimages = S1.to_jimages
             )

@@ -226,6 +226,9 @@ class update_u(torch.nn.Module):
 
 
 def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
+    if fc_num_layers == 0:
+        return nn.Linear(in_dim, out_dim)
+
     mods = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
     for _ in range(fc_num_layers-1):
         mods += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()]
@@ -252,15 +255,15 @@ class transformer(torch.nn.Module):
         super(transformer, self).__init__()
         self.lin1 = nn.Linear(num_node*3,num_node*d_model)
         self.encoder = Encoder(d_model, ffn_hidden, n_head, n_layers, drop_prob)
-        self.lin2 = nn.Linear(d_model,3)
+        # self.lin2 = nn.Linear(d_model,out_dim)
         #self.num_node = num_node
         self.d_model = d_model
 
     def forward(self,x):
         x0 = self.lin1(x)
         x1 = self.encoder(x0.view(x0.shape[0],-1,self.d_model))
-        x2 = self.lin2(x1)
-        return x2.view(x.shape[0],-1)
+        # x2 = self.lin2(x1)
+        return x1
 
 class transformer_cond(torch.nn.Module):
     def __init__(self,num_node,d_model,n_head,ffn_hidden,n_layers,drop_prob):

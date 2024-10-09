@@ -21,13 +21,14 @@ class MatGen(torch.nn.Module):
             self.encoder_backbone = SphereNetEncoder(**enc_backbone_params)
         elif backbone_name == 'nequip':
             self.encoder_backbone = NequipEncoder(**enc_backbone_params)
-
+        elif backbone_name == 'transformer':
+            self.encoder_backbone = NequipEncoder(**enc_backbone_params)
         self.use_node_num_loss = use_node_num_loss
         self.pred_prop = pred_prop
 
         self.min_num_atoms = min_num_atoms
         self.max_num_atoms = max_num_atoms
-
+        self.num_node = num_node
 
         latent_in_dim = enc_backbone_params['out_channels']
         latent_out_dim = latent_dim
@@ -148,9 +149,8 @@ class MatGen(torch.nn.Module):
         #print(data_batch.cart_coords.shape)
         loss_dict = {}
         #mu, log_var, mu_lattice, log_var_lattice, latent_node_num, latent_pos, latent_lattice, latent_prop = self.encode(data_batch, temp)
-        
+        latent_prop, latent_pos = None, None
 
-        # TODO: how to revise element type
         if self.use_node_num_loss:
             pass
             #pred_node_num_prob = self.fc_node_num(latent_node_num) # [256, 50]
@@ -180,14 +180,40 @@ class MatGen(torch.nn.Module):
 
         #loss_dict['kld_loss'] = torch.mean(-0.5 * torch.sum(1.0 + log_var - mu ** 2 - log_var.exp(), dim=1), dim=0) + \
         #    torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)
+        '''if self.pred_prop:
+            pred_prop = self.fc_prop(latent_prop)
+            target_y = data_batch.y
+            if self.prop_normalizer is not None:
+                target_y = self.prop_normalizer.transform(target_y)
+            loss_dict['property_loss'] = F.mse_loss(pred_prop.view(-1), target_y)
+        else:
+            loss_dict['property_loss'] = torch.tensor(0.0)'''
+
+        '''if self.use_multi_latent:
+            loss_dict['kld_loss1'] = torch.mean(-0.5 * torch.sum(1.0 + log_var[:, :self.latent_dim] - mu[:, :self.latent_dim] ** 2 - log_var[:, :self.latent_dim].exp(), dim=1), dim=0)
+            loss_dict['kld_loss2'] = torch.mean(-0.5 * torch.sum(1.0 + log_var[:, self.latent_dim:] - mu[:, self.latent_dim:] ** 2 - log_var[:, self.latent_dim:].exp(), dim=1), dim=0)
+            loss_dict['kld_loss3'] = torch.mean(-0.5 * torch.sum(1.0 + log_var_lattice - mu_lattice ** 2 - log_var_lattice.exp(), dim=1), dim=0)'''
+
+
+        '''if self.lattice_scale:
+            num_atoms = data_batch.num_atoms
+            lengths = data_batch.lengths
+            scaled_lengths= lengths / (num_atoms.view(-1, 1).float())**(1/3)
+            target_lengths_angles = torch.cat([scaled_lengths, data_batch.angles], dim=-1)
+        else:
+            target_lengths_angles = torch.cat([data_batch.lengths, data_batch.angles], dim=-1)
+        if self.lattice_normalizer is not None:
+            target_lengths_angles = self.lattice_normalizer.transform(target_lengths_angles)
+        loss_dict['lattice_loss'] = F.mse_loss(pred_lengths_angles, target_lengths_angles)'''
 
         loss_dict['coord_loss'], loss_dict['dist_reg_loss'], loss_dict['pbc_sym_reg_loss'] = self.coordgen(None, data_batch.num_atoms, data_batch.node_feat, data_batch.frac_coords,data_batch.cart_coords,
-                                                data_batch.lengths, data_batch.angles, data_batch.batch, cond=data_batch.y.view(200,-1).unsqueeze(dim=1))
+                                                data_batch.lengths, data_batch.angles, data_batch.batch, None, None, None,
+                                                distance_reg=distance_reg)
 
-        #cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
-        #                                        data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
+        cut_idx, edge_prob = self.coordgen.predict_edge(latent_pos, data_batch.num_atoms, data_batch.node_feat,
+                                               data_batch.lengths, data_batch.angles, data_batch.cart_coords,data_batch.batch, latent_prop=latent_prop)
 
-        '''target_edge = torch.zeros_like(edge_prob).view(-1)
+        target_edge = torch.zeros_like(edge_prob).view(-1)
         di, dj = data_batch.edge_index
         if (di > dj).sum() != (dj > di).sum():
             di = torch.cat([di,dj], dim=-1)
@@ -196,9 +222,10 @@ class MatGen(torch.nn.Module):
         find_idxa = (cut_idx[1,idxi[1]] == dj[idxi[0]]).nonzero().view(-1)
         target_edge[idxi[1,find_idxa]] = 1.0
         edge_loss = self.bce_loss(edge_prob.view(-1), target_edge)
-        loss_dict['edge_pred_loss'] = edge_loss'''
+        loss_dict['edge_pred_loss'] = edge_loss
 
         return loss_dict
+
     def bce_loss(self, pred, target, reduction='mean'):
         pos = torch.eq(target, 1).float()
         neg = torch.eq(target, 0).float()
@@ -211,7 +238,7 @@ class MatGen(torch.nn.Module):
         return F.binary_cross_entropy(pred, target, weight=weight, reduction=reduction)
 
     @torch.no_grad()
-    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.6,cond=None):
+    def generate(self, num_gen, temperature=[0.5, 0.5, 0.5, 0.5, 0.01], coord_noise_start=0.01, coord_noise_end=10, coord_num_diff_steps=10, coord_num_langevin_steps=100, coord_step_rate=1e-4,num_atoms=None, min_num_atom=5, max_num_atom=50,threshold=0.6):
 
         if not self.use_multi_latent:
             if self.use_gpu:
@@ -266,6 +293,8 @@ class MatGen(torch.nn.Module):
             atom_types = torch.zeros((num_gen, 1), dtype=torch.long).to(latent_comp.device)
             atom_types = torch.repeat_interleave(atom_types, num_atoms, dim=0)
 
+        num_atoms = torch.ones((num_gen,), dtype=torch.long ).to(latent_comp.device) * self.num_node
+
         lengths_angles = self.fc_lattice(latent_lattice)
         if self.lattice_normalizer is not None:
             lengths_angles = self.lattice_normalizer.inverse_transform(lengths_angles)
@@ -274,7 +303,7 @@ class MatGen(torch.nn.Module):
             lengths = lengths * num_atoms.view(-1, 1).float()**(1/3)
         
         frac_coords, edge_index = self.coordgen.generate(latent_pos, num_atoms, atom_types, lengths, angles, coord_noise_start,
-                                             coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, temperature[-1], coord_step_rate,threshold=threshold, latent_prop=latent_prop,cond=cond)
+                                             coord_noise_end, coord_num_diff_steps, coord_num_langevin_steps, temperature[-1], coord_step_rate,threshold=threshold, latent_prop=latent_prop)
 
         #print(frac_coords)
         #input()
@@ -334,6 +363,8 @@ class MatGen(torch.nn.Module):
                                                          coord_noise_end, coord_num_diff_steps,
                                                          coord_num_langevin_steps, temperature[-1], coord_step_rate,
                                                          threshold=threshold, latent_prop=latent_prop, edge_index=None, to_jimages=None, num_bonds=None)
+
+        num_atoms = torch.ones((num_gen, )) * self.num_node
 
         return num_atoms, atom_types, lengths, angles, frac_coords, edge_index, prediected_prop
         

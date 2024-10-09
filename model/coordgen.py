@@ -11,7 +11,7 @@ from traitlets import Int
 
 from .spherenet_light import SphereNetLightDecoder
 from .Nequip.nequip_decoder import NequipDecoder
-from .modules import build_mlp, aggregate_to_node, res_mlp, transformer, transformer_cond
+from .modules import build_mlp, aggregate_to_node, res_mlp, transformer
 import sys
 sys.path.append("..")
 from utils import get_pbc_cutoff_graphs, frac_to_cart_coords, cart_to_frac_coords, correct_cart_coords, \
@@ -30,22 +30,31 @@ class CoordGen(torch.nn.Module):
             self.backbone = SphereNetLightDecoder(**backbone_params)
         elif backbone_name == 'nequip':
             self.backbone = NequipDecoder(**backbone_params)
+        elif backbone_name == 'transformer':
+            self.backbone = transformer(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
+                                        drop_prob=0.1)
 
         if not property_loss:
             property_dim = 0
         else:
             property_dim = latent_dim
         #self.fc_score = build_mlp(latent_dim + backbone_params['hidden_channels']+ property_dim, fc_hidden_dim, num_fc_hidden_layers, 1) #ini
-        #self.fc_score = build_mlp(45,150,2,45) #ric
         #self.fc_score = res_mlp(num_node)
-        self.fc_score = transformer_cond(num_node=num_node,d_model=128,n_head=8,ffn_hidden=128,n_layers=3,drop_prob=0.1)
+        # self.fc_score = transformer(num_node=num_node,d_model=128,n_head=8,ffn_hidden=128,n_layers=3,drop_prob=0.1)
+        self.fc_score = build_mlp(latent_dim, fc_hidden_dim, fc_num_layers=0, out_dim=3)
         # self.fc_score = aggregate_to_node(latent_dim + backbone_params['hidden_channels']+ property_dim, fc_hidden_dim, 3, num_fc_hidden_layers)
         if backbone_name == 'spherenet':
             self.edge_pred = SphereNetLightDecoder(**backbone_params)
         elif backbone_name == 'nequip':
             self.edge_pred = NequipDecoder(**backbone_params)
-        self.fc_edge_lin = build_mlp(latent_dim + backbone_params['hidden_channels'] + property_dim, fc_hidden_dim, 1, latent_dim)
-        self.fc_edge_prob = build_mlp(latent_dim, fc_hidden_dim, 2, latent_dim)
+        elif backbone_name == 'transformer':
+            self.edge_pred = transformer(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
+                                        drop_prob=0.1)
+
+        # TODO: fc_edge_lin not used in current version
+        self.fc_edge_lin = build_mlp(latent_dim, fc_hidden_dim, 1, latent_dim)
+
+        self.fc_edge_prob = build_mlp(latent_dim, fc_hidden_dim, 0, latent_dim)
         self.binlin = nn.Bilinear(latent_dim, latent_dim, 1)
 
         self.cutoff = cutoff
@@ -164,7 +173,7 @@ class CoordGen(torch.nn.Module):
         return torch.cat([shrinked_coords,coords_to_add],dim=1)
 
 
-    def forward(self, latents, num_atoms, atom_types, gt_frac_coords, gt_cart_coords, lengths, angles, batch, edge_index=None, to_jimages=None, num_bonds=None, distance_reg=None, latent_prop=None, cond=None):
+    def forward(self, latents, num_atoms, atom_types, gt_frac_coords, gt_cart_coords, lengths, angles, batch, edge_index=None, to_jimages=None, num_bonds=None, distance_reg=None, latent_prop=None):
         torch.set_printoptions(threshold=torch.inf)
         '''print(torch.max(gt_frac_coords[18:27]))
         print(gt_frac_coords[18:27])
@@ -195,8 +204,31 @@ class CoordGen(torch.nn.Module):
         #cart_coords_perturbed = correct_cart_coords(cart_coords_perturbed, lengths, angles, num_atoms, batch) #本来有
         #ric
         cart_coords_perturbed = cart_coords_perturbed.reshape((batch_size,-1))
-        fc_score = self.fc_score(cart_coords_perturbed, cond)
-        score_loss = F.mse_loss(fc_score,-cart_coords_noise.reshape((batch_size,-1)))
+        fc_score = self.fc_score(self.backbone(cart_coords_perturbed)).view(batch_size,-1)
+        score_loss = F.mse_loss(fc_score,-cart_coords_noise.view(batch_size,-1))
+        
+        '''
+        # compute predicted distances
+        dist_reg_loss =torch.scalar_tensor(0.)
+        # if distance_reg is not None and distance_reg > 0:
+        #     predicted_dist = perturb_dists_per_multi_edge + torch.linalg.norm(scores_per_multi_edge, dim=-1, keepdim=True) / score_norms_per_multi_edge
+        #     predicted_dist = scatter(predicted_dist, multi_edge_to_edge_idx, dim=0, reduce='mean')
+        #     dist_reg_loss = (distance_reg - torch.clamp(predicted_dist, min=0., max=distance_reg)).sum()
+        pbs_sym_reg_loss = torch.scalar_tensor(0.)
+        pbc_sym_reg=False
+        # if pbc_sym_reg:
+        #     cart_coords_preds = cart_coords_perturbed + scores_per_node_pos / score_norms_per_node
+        #     dist_vec_to_center = self._center_coords(cart_coords_preds, batch)
+        #     x_max = dist_vec_to_center[:, 0].max()
+        #     x_min = dist_vec_to_center[:, 0].min()
+        #     y_max = dist_vec_to_center[:, 1].max()
+        #     y_min = dist_vec_to_center[:, 1].min()
+        #     z_max = dist_vec_to_center[:, 2].max()
+        #     z_min = dist_vec_to_center[:, 2].min()
+        #     pbs_sym_reg_loss = torch.mean(torch.abs(x_max + x_min) + torch.abs(y_max + y_min) + torch.abs(z_max + z_min))
+
+        # score_loss, dist_reg_loss, pbs_sym_reg_loss = torch.nan_to_num(score_loss,0.0), torch.nan_to_num(dist_reg_loss,0.0), torch.nan_to_num(pbs_sym_reg_loss,0.0)'''
+
         #return score_loss, dist_reg_loss, pbs_sym_reg_loss
         return score_loss, 0.0, 0.0
 
@@ -214,48 +246,78 @@ class CoordGen(torch.nn.Module):
         #                                                                           lengths, angles,
         #                                                                           num_atoms, self.cutoff,
         #                                                                           self.max_num_neighbors)
-        cut_off_edge_index = radius_graph(cart_coords, self.cutoff, batch=batch, loop=False, max_num_neighbors=self.max_num_neighbors)
-        distance_vectors = cart_coords[cut_off_edge_index[1]] - cart_coords[cut_off_edge_index[0]]
-        edge_features = self.edge_pred(atom_types, cut_off_edge_index, distance_vectors)
+
+        cut_off_edge_index = radius_graph(cart_coords, 5, batch=batch, loop=False, max_num_neighbors=self.num_node)
+        # distance_vectors = cart_coords[cut_off_edge_index[1]] - cart_coords[cut_off_edge_index[0]]
+        batch_size = batch.shape[0]//self.num_node
+        coords = cart_coords.view((batch_size,-1))
+        node_emb = self.backbone(coords)
+
+        node_emb = self.fc_edge_prob(node_emb).view(batch.shape[0], -1)
+        edge_prob = self.binlin(node_emb[cut_off_edge_index[0]], node_emb[cut_off_edge_index[1]])
+        edge_prob = F.sigmoid(edge_prob)
+        return cut_off_edge_index, edge_prob
+
+
+    def predict_pos_score(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigma, threshold=0.6, latent_prop=None, edge_index=None, to_jimages=None, num_bonds=None):
+        #ric
+        return self.fc_score(self.backbone(cart_coords)).view(batch.max()+1,-1)
+        
+        if edge_index is not None and to_jimages is not None and num_bonds is not None:
+            _, distance_vectors, _ = get_pbc_distances(cart_coords, edge_index, lengths, angles, to_jimages, num_atoms, num_bonds, True)
+        else:
+            edge_index, distance_vectors, pbc_offsets = get_pbc_cutoff_graphs(cart_coords, lengths, angles,num_atoms, self.cutoff,self.max_num_neighbors)
+
         num_graphs = batch[-1].item() + 1
-        num_multi_edge_per_graph = scatter(
-            torch.ones(size=(cut_off_edge_index.shape[1],), device=cut_off_edge_index.device).long(),
-            batch[cut_off_edge_index[0]], dim_size=num_graphs, reduce='sum')
+
+        edge_features = self.backbone(atom_types, edge_index, distance_vectors)
+        num_multi_edge_per_graph = scatter(torch.ones(size=(edge_index.shape[1],), device=edge_index.device).long(), batch[edge_index[0]], reduce='sum')
         latents_per_multi_edge = latents.repeat_interleave(num_multi_edge_per_graph, dim=0)
         edge_features = torch.cat((edge_features, latents_per_multi_edge), dim=1)
         if self.property_loss and latent_prop is not None:
             latent_prop_per_multi_edge = latent_prop.repeat_interleave(num_multi_edge_per_graph, dim=0)
             edge_features = torch.cat((edge_features, latent_prop_per_multi_edge), dim=1)
 
-        edge_features = self.fc_edge_lin(edge_features)
-        node_emb = scatter(edge_features, cut_off_edge_index[0], dim=0, dim_size=cart_coords.shape[0], reduce='sum')
-        node_emb = self.fc_edge_prob(node_emb)
-        edge_prob = self.binlin(node_emb[cut_off_edge_index[0]], node_emb[cut_off_edge_index[1]])
-        edge_prob = F.sigmoid(edge_prob)
-        return cut_off_edge_index, edge_prob
+        j, i = edge_index
+        no_iden_mask = (i != j)
+        j, i, edge_features, distance_vectors = j[no_iden_mask], i[no_iden_mask], edge_features[no_iden_mask], distance_vectors[no_iden_mask]
+        dists_per_multi_edge = torch.linalg.norm(distance_vectors, dim=-1, keepdim=True)
+        scores_per_multi_edge = self.fc_score(edge_features) * distance_vectors / dists_per_multi_edge
+        # scores_per_node_pos =  self.fc_score(edge_features,i, distance_vectors, atom_types.shape[0])
+        # scores_per_node_pos = scatter(scores_per_multi_edge, i, dim_size=batch.shape[0], dim=0, reduce='add')
 
+        num_multi_edges = len(i)
+        new_edge_start_mask = torch.logical_or(i[:-1] != i[1:], j[:-1] != j[1:])
+        new_edge_start_id = torch.nonzero(new_edge_start_mask).view(-1) + 1
+        num_multi_edges_per_edge = torch.cat([new_edge_start_id[0:1], new_edge_start_id[1:] - new_edge_start_id[:-1], num_multi_edges - new_edge_start_id[-1:]])
+        multi_edge_to_edge_idx = torch.repeat_interleave(torch.arange(len(num_multi_edges_per_edge), device=num_multi_edges_per_edge.device), num_multi_edges_per_edge)
+        scores_per_edge = scatter(scores_per_multi_edge, multi_edge_to_edge_idx, dim=0, reduce='mean')
+        unique_edge_receiver_index = scatter(i, multi_edge_to_edge_idx, dim=0, reduce='mean').long()
+        scores_per_node_pos = scatter(scores_per_edge, unique_edge_receiver_index, dim=0, dim_size=len(batch), reduce='sum')
 
-    def predict_pos_score(self, latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigma, threshold=0.6, latent_prop=None, edge_index=None, to_jimages=None, num_bonds=None, cond=None):
-        return self.fc_score(cart_coords, cond=cond)
-        
-        
+        if self.score_norms is not None:
+            score_norm = self.get_score_norm(sigma)
+        else:
+            score_norm = sigma
+
+        return scores_per_node_pos / score_norm
 
 
 
     @torch.no_grad()
     def generate(self, latents, num_atoms, atom_types, lengths, angles, noise_start, noise_end, num_gen_steps=10,
                  num_langevin_steps=100, coord_temp=0.01, step_rate=1e-4, threshold=0.6, latent_prop=None, edge_index=None,
-                 to_jimages=None, num_bonds=None, cond=None):
+                 to_jimages=None, num_bonds=None):
         # log_sigmas = np.linspace(np.log(noise_start), np.log(noise_end), num_gen_steps)
         # sigmas = np.exp(log_sigmas)
         # sigmas = torch.from_numpy(sigmas).float()
         # sigmas.requires_grad = False
-        num_of_samples_gen = cond.shape[0]
         sigmas = self.sigmas
         sigmas = torch.cat([torch.zeros([1], device=sigmas.device), sigmas])
 
-        num_of_samples_gen = cond.shape[0]
-        batch = torch.repeat_interleave(torch.arange(len(num_atoms), device=num_atoms.device), num_atoms)
+
+        num_of_samples_gen = num_atoms.shape[0]
+        batch = torch.repeat_interleave(torch.arange(num_of_samples_gen, device=num_atoms.device), self.num_node)
         #frac_coords_init = torch.rand(size=(batch.shape[0], 3), device=lengths.device) - 0.5
         #frac_coords_init = torch.rand(size=(angles.shape[0], 45), device=lengths.device) - 0.5
         frac_coords_init = 5*(torch.rand((num_of_samples_gen,self.num_node*3),device='cuda') - 0.5)
@@ -270,7 +332,7 @@ class CoordGen(torch.nn.Module):
             #current_alpha = step_rate
             current_alpha = 0.000000008*(sigmas[t] / sigmas[1])**2
             for _ in range(num_langevin_steps):
-                scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds, cond=cond)
+                scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds)
                 #print('adfjkahsdfkj')
                 #print(current_alpha)
                 #print(scores_per_node_pos)
@@ -284,16 +346,16 @@ class CoordGen(torch.nn.Module):
         #frac_coords = cart_to_frac_coords(cart_coords, lengths, angles, num_atoms)
         frac_coords = cart_coords.reshape((num_of_samples_gen,-1,3))
 
-        '''if edge_index is None:
-            cutoff_ind, edge_prob = self.predict_edge(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, latent_prop=latent_prop)
+        if edge_index is None:
+            cutoff_ind, edge_prob = self.predict_edge(latents, num_atoms, atom_types, lengths, angles, frac_coords.reshape((-1,3)), batch, latent_prop=latent_prop)
             edge_prob = edge_prob.view(-1)
             edge_index = cutoff_ind[:, edge_prob > threshold]
-            edge_index = edge_index[:, edge_index[0] < edge_index[1]]'''
+            edge_index = edge_index[:, edge_index[0] < edge_index[1]]
 
         # edge_index=cutoff_ind
         #return frac_coords, edge_index
         #print(frac_coords)
         #input()
         #return self.expend_coords(frac_coords).reshape((-1,3)), 0
-        return frac_coords.reshape((-1,3)), 0
+        return frac_coords.reshape((-1,3)), edge_index
 

@@ -63,13 +63,16 @@ conf_dec_spherenet['out_emb_channels'] = 128
 conf_dec_spherenet['num_spherical'] = 7
 conf_dec_spherenet['num_radial'] = 6
 
-conf_model['backbone_name'] =  'nequip'
+conf_model['backbone_name'] =  'transformer'
 if conf_model['backbone_name'] == 'nequip':
     conf_model['enc_backbone_params'] = conf_enc_nequip
     conf_model['dec_backbone_params'] = conf_dec_nequip
 elif conf_model['backbone_name'] == 'spherenet':
     conf_model['enc_backbone_params'] = conf_enc_spherenet
     conf_model['dec_backbone_params'] = conf_dec_spherenet
+elif conf_model['backbone_name'] == 'transformer':
+    conf_model['enc_backbone_params'] = conf_enc_nequip
+    conf_model['dec_backbone_params'] = None
 
 conf_model['latent_dim'] = 128
 conf_model['num_fc_hidden_layers'] = 2
@@ -108,8 +111,8 @@ conf['pbc_sym_reg_weight'] = .0
 
 
 conf['data'] = conf_data
-conf['train_size'] = 15000
-conf['valid_size'] = 3000
+conf['train_size'] = 8000
+conf['valid_size'] = 1000
 conf['seed'] = 1
 conf['model'] = conf_model
 conf['optim'] = conf_optim
