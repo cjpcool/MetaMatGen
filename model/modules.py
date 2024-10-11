@@ -266,10 +266,10 @@ class transformer(torch.nn.Module):
         return x1
 
 class transformer_cond(torch.nn.Module):
-    def __init__(self,num_node,d_model,n_head,ffn_hidden,n_layers,drop_prob):
+    def __init__(self,num_node,d_model,n_head,ffn_hidden,n_layers,drop_prob, cond_dim=21):
         super(transformer_cond, self).__init__()
         self.lin1 = nn.Linear(num_node*3,num_node*d_model)
-        self.encoder = Encoder_cond(d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node)
+        self.encoder = Encoder_cond(d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node, cond_dim=cond_dim)
         # self.lin2 = nn.Linear(d_model,3)
         #self.num_node = num_node
         self.d_model = d_model

@@ -176,7 +176,7 @@ class Encoder(nn.Module):
 
 class EncoderLayer_cond(nn.Module):
 
-    def __init__(self, d_model, ffn_hidden, n_head, drop_prob, num_node):
+    def __init__(self, d_model, ffn_hidden, n_head, drop_prob, num_node, cond_dim=21):
         super(EncoderLayer_cond, self).__init__()
         self.d_model = d_model
         self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head)
@@ -187,7 +187,7 @@ class EncoderLayer_cond(nn.Module):
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(p=drop_prob)
 
-        self.lin1 = nn.Linear(21,d_model*num_node)
+        self.lin1 = nn.Linear(cond_dim,d_model*num_node)
 
     def forward(self, x, cond):
         # 1. compute self attention
@@ -213,13 +213,13 @@ class EncoderLayer_cond(nn.Module):
 
 class Encoder_cond(nn.Module):
 
-    def __init__(self, d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node):
+    def __init__(self, d_model, ffn_hidden, n_head, n_layers, drop_prob, num_node, cond_dim=21):
         super().__init__()
         self.layers = nn.ModuleList([EncoderLayer_cond(d_model=d_model,
                                                   ffn_hidden=ffn_hidden,
                                                   n_head=n_head,
                                                   drop_prob=drop_prob,
-                                                  num_node=num_node)
+                                                  num_node=num_node, cond_dim=cond_dim)
                                      for _ in range(n_layers)])
 
     def forward(self, x, cond):

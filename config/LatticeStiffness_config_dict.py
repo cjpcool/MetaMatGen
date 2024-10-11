@@ -117,9 +117,9 @@ conf['seed'] = 1
 conf['model'] = conf_model
 conf['optim'] = conf_optim
 conf['verbose'] = 10
-conf['batch_size'] = 80 #ini200
-conf['start_epoch'] = 0
-conf['end_epoch'] = 1000
+conf['batch_size'] = 20 #ini200
+conf['start_epoch'] = 1000
+conf['end_epoch'] = 1200
 conf['save_interval'] = 20
 conf['chunk_size'] = 1000
 # temperature: encode(latent_comp, latent_pos, latent_lattice) , decode(latent_coords

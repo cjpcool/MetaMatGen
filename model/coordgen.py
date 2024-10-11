@@ -8,7 +8,7 @@ from torch_scatter import scatter
 from tqdm import tqdm
 from traitlets import Int
 
-
+from .features import device
 from .spherenet_light import SphereNetLightDecoder
 from .Nequip.nequip_decoder import NequipDecoder
 from .modules import build_mlp, aggregate_to_node, res_mlp, transformer, transformer_cond
@@ -22,7 +22,7 @@ EPS = 1e-8
 class CoordGen(torch.nn.Module):
     def __init__(self, backbone_params, latent_dim, num_fc_hidden_layers, fc_hidden_dim, num_time_steps, noise_start, noise_end, cutoff, max_num_neighbors, num_node, 
                  loss_type='per_node', score_upper_bound=None, use_gpu=True, score_norm=None,
-                 property_loss=False, backbone_name='spherenet'):
+                 property_loss=False, backbone_name='spherenet', property_dim=21):
         super(CoordGen, self).__init__()
         self.property_loss = property_loss
 
@@ -32,7 +32,7 @@ class CoordGen(torch.nn.Module):
             self.backbone = NequipDecoder(**backbone_params)
         elif backbone_name == 'transformer':
             self.backbone = transformer_cond(num_node=num_node, d_model=latent_dim, n_head=8, ffn_hidden=128, n_layers=3,
-                                        drop_prob=0.1)
+                                        drop_prob=0.1, cond_dim=property_dim)
 
         if not property_loss:
             property_dim = 0
@@ -225,11 +225,12 @@ class CoordGen(torch.nn.Module):
         #                                                                           num_atoms, self.cutoff,
         #                                                                           self.max_num_neighbors)
         if not generate_mode:
-            max_num_neighbors=5
+            max_num_neighbors=self.num_node
             radius=5
         else:
             max_num_neighbors=self.num_node
-            radius=1.0
+            # max_num_neighbors=10
+            radius=5
         cut_off_edge_index = radius_graph(cart_coords, radius, batch=batch, loop=False, max_num_neighbors=max_num_neighbors)
         # distance_vectors = cart_coords[cut_off_edge_index[1]] - cart_coords[cut_off_edge_index[0]]
         batch_size = batch.shape[0]//self.num_node
@@ -263,8 +264,9 @@ class CoordGen(torch.nn.Module):
         batch = torch.repeat_interleave(torch.arange(num_of_samples_gen, device=num_atoms.device), self.num_node)
         #frac_coords_init = torch.rand(size=(batch.shape[0], 3), device=lengths.device) - 0.5
         #frac_coords_init = torch.rand(size=(angles.shape[0], 45), device=lengths.device) - 0.5
-        frac_coords_init = 5*(torch.rand((num_of_samples_gen,self.num_node,3),device='cuda') - 0.5)
-        
+        frac_coords_init = 10*(torch.rand((num_of_samples_gen,self.num_node,3),device='cuda') - 0.5)
+        # frac_coords_init = torch.distributions.normal.Normal(torch.zeros([self.num_node,3]),
+        #                                   2*torch.ones([self.num_node,3])).sample([num_of_samples_gen]).to('cuda')
         #cart_coords_init = frac_to_cart_coords(frac_coords_init, lengths, angles, num_atoms)
         cart_coords_init = frac_coords_init
 
@@ -292,7 +294,7 @@ class CoordGen(torch.nn.Module):
         if edge_index is None:
             cutoff_ind, edge_prob = self.predict_edge(latents, num_atoms, atom_types, lengths, angles, frac_coords.reshape((-1,3)), batch, latent_prop=latent_prop, cond=cond,generate_mode=True)
             edge_prob = edge_prob.view(-1)
-            edge_index = cutoff_ind[:, edge_prob > threshold]
+            edge_index = cutoff_ind[:, edge_prob >= threshold]
             edge_index = edge_index[:, edge_index[0] < edge_index[1]]
 
         # edge_index=cutoff_ind

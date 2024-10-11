@@ -46,7 +46,7 @@ class MatGen(torch.nn.Module):
             self.fc_node_num = build_mlp(latent_dim, fc_hidden_dim, num_fc_hidden_layers, max_num_atoms-min_num_atoms+1)
 
         self.coordgen = CoordGen(dec_backbone_params, latent_dim, num_fc_hidden_layers, fc_hidden_dim, num_time_steps,
-            noise_start, noise_end, cutoff, max_num_neighbors, num_node, loss_type=coord_loss_type, use_gpu=use_gpu, score_norm=score_norm, property_loss=pred_prop, backbone_name=backbone_name)
+            noise_start, noise_end, cutoff, max_num_neighbors, num_node, loss_type=coord_loss_type, use_gpu=use_gpu, score_norm=score_norm, property_loss=pred_prop, backbone_name=backbone_name, property_dim=property_dim)
 
         self.cutoff = cutoff
 

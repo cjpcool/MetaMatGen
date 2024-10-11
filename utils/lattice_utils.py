@@ -40,7 +40,7 @@ def plot_lattice(coordinates,connectity, diameter=-1, save_dir=None):
         fig.show()
     else:
         print('Saving figure to {}'.format(save_dir))
-        fig.show()
+        fig.write_image(save_dir)
         print('Saved figure to {}'.format(save_dir))
 
 def scale_to_cell(pos, lengths):

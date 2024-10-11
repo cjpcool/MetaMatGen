@@ -1,3 +1,5 @@
+from itertools import combinations
+
 import numpy as np
 import torch
 from torch_scatter import scatter
@@ -33,11 +35,11 @@ class Structure:
         self.num_nodes = coordinates.shape[0]
         self.diameter = diameter
         if is_cartesian:
-            self.frac_coords = self.cart_to_frac_coords(coordinates, self.lattice_params[0], self.lattice_params[1],
+            self.frac_coords = self.cart_to_frac_coords(coordinates, self.lattice_vector,
                                                         self.num_nodes)
             self.cart_coords = coordinates
         else:
-            self.cart_coords = self.frac_to_cart_coords(coordinates, self.lattice_params[0], self.lattice_params[1],
+            self.cart_coords = self.frac_to_cart_coords(coordinates, self.lattice_vector,
                                                         self.num_nodes)
             self.frac_coords = coordinates
 
@@ -166,11 +168,11 @@ class Structure:
     @staticmethod
     def frac_to_cart_coords(
             frac_coords,
-            lengths,
-            angles,
+            lattice,
             num_atoms,
     ):
-        lattice = Structure.lattice_params_to_matrix_torch(lengths, angles)
+        if len(lattice.shape) == 2:
+            lattice = lattice.unsqueeze(0)
         lattice_nodes = torch.repeat_interleave(lattice, num_atoms, dim=0)
         cart_coords = torch.einsum('bi,bij->bj', frac_coords.float(), lattice_nodes.float())  # cart coords
         return cart_coords
@@ -178,11 +180,11 @@ class Structure:
     @staticmethod
     def cart_to_frac_coords(
             cart_coords,
-            lengths,
-            angles,
+            lattice,
             num_atoms,
     ):
-        lattice = Structure.lattice_params_to_matrix_torch(lengths, angles)
+        if len(lattice.shape) == 2:
+            lattice = lattice.unsqueeze(0)
         # use pinv in case the predicted lattice is not rank 3
         inv_lattice = torch.pinverse(lattice)
         inv_lattice_nodes = torch.repeat_interleave(inv_lattice, num_atoms, dim=0)
@@ -190,8 +192,9 @@ class Structure:
         return frac_coords
 
     @staticmethod
-    def correct_cart_coords(cart_coords, lengths, angles, num_atoms, batch):
-        lattice = Structure.lattice_params_to_matrix_torch(lengths, angles)
+    def correct_cart_coords(cart_coords, lattice, num_atoms, batch):
+        if len(lattice.shape) == 2:
+            lattice = lattice.unsqueeze(0)
         lattice_nodes = torch.repeat_interleave(lattice, num_atoms, dim=0)
 
         inv_lattice = torch.inverse(lattice)

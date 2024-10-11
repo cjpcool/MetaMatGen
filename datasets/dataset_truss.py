@@ -134,7 +134,6 @@ class LatticeModulus(InMemoryDataset):
 
 
 
-
 class LatticeStiffness(InMemoryDataset):
     # define column names from data
     F1_features_names = ['relative_density', 'U1', 'U2', 'U3', 'lattice_type1', 'lattice_type2', 'lattice_type3',
@@ -198,23 +197,20 @@ class LatticeStiffness(InMemoryDataset):
         print(len(df))
         data_list = []
 
-        #for i in tqdm(range(len(df))):
-        for i in tqdm(range(100000)):
-            #if i > 100000:
-            #    break
+        for i in tqdm(range(len(df))):
+        # for i in tqdm(range(100)):
             dfi = df.iloc[i]
             exported_lattice = Topology(dfi)
             
-            if exported_lattice.coordinates.shape[0] > 15: continue
+            # if exported_lattice.coordinates.shape[0] > 15: continue
             coords = torch.from_numpy(exported_lattice.coordinates)
+            # lattice_vector = Structure.find_lattice_vectors(coords)
             lattice_vector = torch.from_numpy(exported_lattice.lattice_vector)
-            a, b, c = lattice_vector[0], lattice_vector[1], lattice_vector[2]
-            lengths = torch.stack([torch.norm(a), torch.norm(b), torch.norm(c)])
-            cart_coords = scale_to_cell(coords, lengths)
+            # cart_coords = scale_to_cell(coords, lengths)
 
             S1 = Structure(lattice_vector,
                            torch.from_numpy(exported_lattice.connectity),
-                           cart_coords, is_cartesian=True,
+                           coords, is_cartesian=True,
                            diameter=exported_lattice.diameter,
                            properties=torch.from_numpy(dfi[self.C_names].values),
                            properties_names=self.C_names)
@@ -225,7 +221,7 @@ class LatticeStiffness(InMemoryDataset):
             lattice_vector = S1.lattice_vector.view(1, -1)
             data = Data(
                 frac_coords=S1.frac_coords.to(torch.float32),
-                cart_coords=self.shrink_coords(S1.cart_coords.to(torch.float32)),
+                cart_coords=S1.cart_coords.to(torch.float32),
                 node_feat=node_feat,
                 edge_feat=edge_feat,
                 edge_index=S1.edge_index,
@@ -291,12 +287,14 @@ class LatticeStiffness(InMemoryDataset):
 
 
 
-if __name__ == '__main__':
+def main():
     from torch_geometric.loader import DataLoader
     from utils.lattice_utils import plot_lattice
 
     # dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
-    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
+    # dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training')
+
+    dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
     data_list = []
     for i in tqdm(range(len(dataset))):
         raw = dataset[i]
@@ -312,17 +310,14 @@ if __name__ == '__main__':
             lengths=raw.lengths,
             angles=raw.angles,
             vector=lattice_params_to_matrix_torch(raw.lengths, raw.angles),
-            # property=raw.y,
             y=raw.y.view(1,-1),
             to_jimages=raw.to_jimages
         )
-
-
-
         data_list.append(data)
-    torch.save(InMemoryDataset.collate(data_list), '/home/jianpengc/datasets/metamaterial/LatticeStiffness/training_node_num47/processed/data.pt')
+    torch.save(InMemoryDataset.collate(data_list), '/home/jianpengc/datasets/metamaterial/LatticeModulus/data_node_num32/processed/data.pt')
     # dataset = LatticeModulus('D:\项目\Material design\code_data\data\LatticeModulus', file_name='data')
-    dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
+    # dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
+    dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
 
     split_idx = dataset.get_idx_split(len(dataset), train_size=5, valid_size=5, seed=42)
     print(split_idx.keys())
@@ -348,4 +343,6 @@ if __name__ == '__main__':
     print(data.y)
     print(data.cart_coords.dtype)
 
-    plot_lattice(data.cart_coords, data.edge_index.t(), show=True)
+if __name__ == '__main__':
+    main()
+    # plot_lattice(data.cart_coords, data.edge_index.t())

@@ -53,12 +53,12 @@ def plot_lattice_from_path(path, name, cutoff=2.0,max_num_neighbors_threshold=5,
 
 if __name__ == '__main__':
 
-    path = './generated_mat/new_data'
+    path = './generated_mat/47node'
     file_names = os.listdir(path)
-    save_path = './vis/generated_mat/new_data'
+    save_path = './vis/generated_mat/47node_stiffness'
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     for file_name in file_names:
         save_dir = os.path.join(save_path,file_name[:-3]+'jpeg')
-        plot_lattice_from_path(path, file_name,cutoff=1., max_num_neighbors_threshold=5, save_dir=save_dir)
+        plot_lattice_from_path(path, file_name, save_dir=save_dir)
     # plot_origin_lattice_from_path(path, name,cutoff=1., max_num_neighbors_threshold=5)
