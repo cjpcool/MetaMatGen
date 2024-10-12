@@ -197,8 +197,8 @@ class LatticeStiffness(InMemoryDataset):
         print(len(df))
         data_list = []
 
-        for i in tqdm(range(len(df))):
-        # for i in tqdm(range(100)):
+        # for i in tqdm(range(len(df))):
+        for i in tqdm(range(100)):
             dfi = df.iloc[i]
             exported_lattice = Topology(dfi)
             
@@ -206,7 +206,6 @@ class LatticeStiffness(InMemoryDataset):
             coords = torch.from_numpy(exported_lattice.coordinates)
             # lattice_vector = Structure.find_lattice_vectors(coords)
             lattice_vector = torch.from_numpy(exported_lattice.lattice_vector)
-            # cart_coords = scale_to_cell(coords, lengths)
 
             S1 = Structure(lattice_vector,
                            torch.from_numpy(exported_lattice.connectity),
@@ -291,33 +290,12 @@ def main():
     from torch_geometric.loader import DataLoader
     from utils.lattice_utils import plot_lattice
 
-    # dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
+    dataset = LatticeStiffness('D:\项目\Material design\code_data\data\LatticeStiffness', file_name='training')
     # dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training')
-
-    dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
-    data_list = []
-    for i in tqdm(range(len(dataset))):
-        raw = dataset[i]
-        data = Data(
-            frac_coords=raw.frac_coords,
-            cart_coords=raw.cart_coords,
-            node_feat=raw.node_feat,
-            edge_feat=raw.edge_feat,
-            edge_index=raw.edge_index,
-            num_nodes=raw.num_nodes,
-            num_atoms=raw.num_nodes,
-            num_edges=raw.num_edges,
-            lengths=raw.lengths,
-            angles=raw.angles,
-            vector=lattice_params_to_matrix_torch(raw.lengths, raw.angles),
-            y=raw.y.view(1,-1),
-            to_jimages=raw.to_jimages
-        )
-        data_list.append(data)
-    torch.save(InMemoryDataset.collate(data_list), '/home/jianpengc/datasets/metamaterial/LatticeModulus/data_node_num32/processed/data.pt')
+    # dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
     # dataset = LatticeModulus('D:\项目\Material design\code_data\data\LatticeModulus', file_name='data')
     # dataset = LatticeStiffness('/home/jianpengc/datasets/metamaterial/LatticeStiffness', file_name='training_node_num47')
-    dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
+    # dataset = LatticeModulus('/home/jianpengc/datasets/metamaterial/LatticeModulus', file_name='data_node_num32')
 
     split_idx = dataset.get_idx_split(len(dataset), train_size=5, valid_size=5, seed=42)
     print(split_idx.keys())

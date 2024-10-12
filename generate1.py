@@ -21,9 +21,9 @@ if __name__ == '__main__':
     # parser.add_argument('--dataset', type=str, default='perov_5', help='Dataset name, must be perov_5, carbon_24, or mp_20')
     parser.add_argument('--dataset', type=str, default='LatticeModulus', help='Dataset name, must be perov_5, carbon_24, or mp_20, LatticeModulus, LatticeStiffness')
     parser.add_argument('--data_path', type=str, default='/home/jianpengc/datasets/metamaterial/', help='The directory for storing training outputs')
-    parser.add_argument('--save_mat_path', type=str, default='generated_mat/32node_modulus', help='The directory for storing training outputs')
+    parser.add_argument('--save_mat_path', type=str, default='generated_mat/32node_modulus_2', help='The directory for storing training outputs')
 
-    parser.add_argument('--num_gen', type=int, default=10, help='Number of materials to generate')
+    parser.add_argument('--num_gen', type=int, default=800, help='Number of materials to generate')
 
     args = parser.parse_args()
 
@@ -119,5 +119,5 @@ if __name__ == '__main__':
     else:
         clear_folder(save_path)
     for file_name in file_names:
-        save_dir = os.path.join(save_path, file_name[:-3] + 'jpeg')
-        plot_lattice_from_path(path, file_name, save_dir=None)
+        save_dir = os.path.join(save_path, file_name[:-3] + 'png')
+        plot_lattice_from_path(path, file_name, save_dir=save_path)

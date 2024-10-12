@@ -53,9 +53,9 @@ def plot_lattice_from_path(path, name, cutoff=2.0,max_num_neighbors_threshold=5,
 
 if __name__ == '__main__':
 
-    path = './generated_mat/47node'
+    path = './generated_mat/32node_modulus_2'
     file_names = os.listdir(path)
-    save_path = './vis/generated_mat/47node_stiffness'
+    save_path = './vis/generated_mat/32node_modulus_2'
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     for file_name in file_names:

@@ -264,9 +264,9 @@ class CoordGen(torch.nn.Module):
         batch = torch.repeat_interleave(torch.arange(num_of_samples_gen, device=num_atoms.device), self.num_node)
         #frac_coords_init = torch.rand(size=(batch.shape[0], 3), device=lengths.device) - 0.5
         #frac_coords_init = torch.rand(size=(angles.shape[0], 45), device=lengths.device) - 0.5
-        frac_coords_init = 10*(torch.rand((num_of_samples_gen,self.num_node,3),device='cuda') - 0.5)
-        # frac_coords_init = torch.distributions.normal.Normal(torch.zeros([self.num_node,3]),
-        #                                   2*torch.ones([self.num_node,3])).sample([num_of_samples_gen]).to('cuda')
+        # frac_coords_init = 10*(torch.rand((num_of_samples_gen,self.num_node,3),device='cuda') - 0.5)
+        frac_coords_init = torch.distributions.normal.Normal(torch.zeros([self.num_node,3]),
+                                          10*torch.ones([self.num_node,3])).sample([num_of_samples_gen]).to('cuda')
         #cart_coords_init = frac_to_cart_coords(frac_coords_init, lengths, angles, num_atoms)
         cart_coords_init = frac_coords_init
 
@@ -275,7 +275,7 @@ class CoordGen(torch.nn.Module):
         for t in tqdm(range(num_gen_steps, 0, -1)):
             #current_alpha = step_rate * (sigmas[t] / sigmas[1]) ** 2 #ini
             #current_alpha = step_rate
-            current_alpha = 0.000000008*(sigmas[t] / sigmas[1])**2
+            current_alpha = 0.00000008*(sigmas[t] / sigmas[1])**2
             for _ in range(num_langevin_steps):
                 scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds, cond=cond)
                 #print('adfjkahsdfkj')
