@@ -63,8 +63,6 @@ class MatGen(torch.nn.Module):
                 self.fc_node_num = self.fc_node_num.to('cuda')
                 # self.fc_elem_type_num = self.fc_elem_type_num.to('cuda')
 
-
-
         if pred_prop:
             self.fc_prop = build_mlp(latent_dim, fc_hidden_dim, num_fc_hidden_layers, property_dim)
             if use_gpu:
@@ -274,14 +272,6 @@ class MatGen(torch.nn.Module):
             pred_node_num = self.fc_node_num(latent_comp)
             pred_node_num = pred_node_num.argmax(dim=-1) + self.min_num_atoms
             num_atoms = pred_node_num
-
-            # num_atoms_each = [6,8,10,12]
-            # num_atoms = []
-            # while len(num_atoms) < num_gen:
-            #     num_atoms = num_atoms + num_atoms_each
-            # num_gen = min(num_gen, len(num_atoms))
-            # num_atoms = num_atoms[:num_gen]
-            # num_atoms = torch.LongTensor(num_atoms).to(latent_comp.device)
 
             atom_types = torch.zeros((num_gen, 1), dtype=torch.long).to(latent_comp.device)
             atom_types = torch.repeat_interleave(atom_types, num_atoms, dim=0)

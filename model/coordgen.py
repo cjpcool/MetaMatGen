@@ -1,14 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.multiprocessing as mp
 import numpy as np
 from torch_cluster import radius_graph
 from torch_scatter import scatter
 from tqdm import tqdm
-from traitlets import Int
 
-from .features import device
 from .spherenet_light import SphereNetLightDecoder
 from .Nequip.nequip_decoder import NequipDecoder
 from .modules import build_mlp, aggregate_to_node, res_mlp, transformer, transformer_cond
@@ -68,7 +65,6 @@ class CoordGen(torch.nn.Module):
         sigmas = self._get_noise_params(num_time_steps, noise_start, noise_end)
         self.sigmas = nn.Parameter(sigmas, requires_grad=False)
         self.num_time_steps = num_time_steps
-        self.pool = mp.Pool(16)
         self.score_upper_bound = score_upper_bound
         self.loss_type = loss_type
         if use_gpu:
@@ -272,7 +268,7 @@ class CoordGen(torch.nn.Module):
 
         cart_coords = cart_coords_init
         
-        for t in tqdm(range(num_gen_steps, 0, -1)):
+        for t in tqdm(range(num_gen_steps, 0, -1), desc='Denoising'):
             #current_alpha = step_rate * (sigmas[t] / sigmas[1]) ** 2 #ini
             #current_alpha = step_rate
             current_alpha = 0.00000008*(sigmas[t] / sigmas[1])**2

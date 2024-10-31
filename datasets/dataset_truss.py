@@ -23,29 +23,15 @@ from torch_geometric.data import (
     extract_zip,
 )
 
-
-
-class LatticeModulus(InMemoryDataset):
-    downloadurl = ''
-
-    file_names = {'LatticeModulus':'data.pkl'}
-    name = 'LatticeModulus'
-    def __init__(self, data_path: str,
+class LatticeTruss(InMemoryDataset):
+    def __init__(self,data_path: str,
                  file_name='data'):
-        # define column names from data
-        self.raw_data_keys = ['Name', 'Other name(s)', 'lengths', 'angles', 'Z_avg', 'Young', 'Shear', 'Poisson',
-                              'Emax',
-                              'Scaling constants', 'Scaling exponents', 'has overlapping bars', 'Nodal positions',
-                              'Edge index']
-        self.properties_names = ['Young', 'Shear', 'Poisson']
-
         self.data_path = data_path
         self.file_name = file_name
 
         super().__init__(root=data_path)
 
         self.data, self.slices = torch.load(self.processed_paths[0])
-
 
     @property
     def processed_data_exist(self):
@@ -71,6 +57,36 @@ class LatticeModulus(InMemoryDataset):
         url = self.downloadurl
         path = download_url(url, self.raw_dir)
         return path
+
+    def process(self):
+        return NotImplementedError
+
+
+    def get_idx_split(self, data_size, train_size, valid_size, seed):
+        ids = shuffle(range(data_size), random_state=seed)
+        train_idx, val_idx, test_idx = torch.LongTensor(ids[:train_size]), torch.tensor(
+            ids[train_size:train_size + valid_size]), torch.tensor(ids[train_size + valid_size:])
+        split_dict = {'train': train_idx, 'valid': val_idx, 'test': test_idx}
+        return split_dict
+
+
+class LatticeModulus(LatticeTruss):
+    raw_data_keys = ['Name', 'Other name(s)', 'lengths', 'angles', 'Z_avg', 'Young', 'Shear', 'Poisson',
+                     'Emax',
+                     'Scaling constants', 'Scaling exponents', 'has overlapping bars', 'Nodal positions',
+                     'Edge index']
+
+    properties_names = ['Young', 'Shear', 'Poisson']
+
+    downloadurl = ''
+    file_names = {'LatticeModulus':'data.pkl'}
+    name = 'LatticeModulus'
+    def __init__(self, data_path: str,
+                 file_name='data'):
+
+
+        super().__init__(data_path, file_name)
+
 
 
     def process(self):
@@ -122,19 +138,13 @@ class LatticeModulus(InMemoryDataset):
         print('Completed preprocessing data.')
 
 
-    def get_idx_split(self, data_size, train_size, valid_size, seed):
-        ids = shuffle(range(data_size), random_state=seed)
-        train_idx, val_idx, test_idx = torch.LongTensor(ids[:train_size]), torch.tensor(ids[train_size:train_size + valid_size]), torch.tensor(ids[train_size + valid_size:])
-        split_dict = {'train': train_idx, 'valid': val_idx, 'test': test_idx}
-        return split_dict
 
 
 
 
 
 
-
-class LatticeStiffness(InMemoryDataset):
+class LatticeStiffness(LatticeTruss):
     # define column names from data
     F1_features_names = ['relative_density', 'U1', 'U2', 'U3', 'lattice_type1', 'lattice_type2', 'lattice_type3',
                          'lattice_rep1', 'lattice_rep2', 'lattice_rep3']
@@ -157,37 +167,7 @@ class LatticeStiffness(InMemoryDataset):
     name = 'LatticeStiffness'
     def __init__(self, data_path: str,
                  file_name='training'):
-        self.data_path = data_path
-        self.file_name = file_name
-
-        super().__init__(root=data_path)
-
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-    @property
-    def processed_data_exist(self):
-        return os.path.exists(self.processed_paths[0])
-
-    @property
-    def raw_dir(self) -> str:
-        return os.path.join(self.root, self.file_name, 'raw')
-
-    @property
-    def processed_dir(self) -> str:
-        return os.path.join(self.root, self.file_name, 'processed')
-    @property
-    def processed_file_names(self) -> List[str]:
-        return ['data.pt']
-
-    @property
-    def raw_file_names(self) -> str:
-        name = self.file_names[self.name]
-        return name
-
-    def download(self):
-        url = self.downloadurl
-        path = download_url(url, self.raw_dir)
-        return path
+        super().__init__(data_path, file_name)
 
 
     def process(self):
@@ -206,7 +186,6 @@ class LatticeStiffness(InMemoryDataset):
             coords = torch.from_numpy(exported_lattice.coordinates)
             # lattice_vector = Structure.find_lattice_vectors(coords)
             lattice_vector = torch.from_numpy(exported_lattice.lattice_vector)
-
             S1 = Structure(lattice_vector,
                            torch.from_numpy(exported_lattice.connectity),
                            coords, is_cartesian=True,
@@ -243,12 +222,7 @@ class LatticeStiffness(InMemoryDataset):
         print('Completed preprocessing data.')
 
 
-    def get_idx_split(self, data_size, train_size, valid_size, seed):
-        ids = shuffle(range(data_size), random_state=seed)
-        train_idx, val_idx, test_idx = torch.LongTensor(ids[:train_size]), torch.tensor(ids[train_size:train_size + valid_size]), torch.tensor(ids[train_size + valid_size:])
-        split_dict = {'train': train_idx, 'valid': val_idx, 'test': test_idx}
-        return split_dict
-    
+
     def find_corners_index(self,coords):
         corners = []  #index of 4 corners
         center = torch.mean(coords,dim=0)

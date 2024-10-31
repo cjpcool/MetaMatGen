@@ -18,6 +18,9 @@ class Runner():
             score_norm = None
         self.model = MatGen(**conf['model'], score_norm=score_norm)
         self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), **conf['optim'])
+        self.train_dataset = None
+        self.test_dataset = None
+        self.valid_dataset = None
 
     def _get_normalizer(self, dataset):
         normalizer = StandardScalerTorch()
@@ -293,10 +296,11 @@ class Runner():
 
     def generate(self, num_gen, data_path, coord_num_langevin_steps=100, coord_step_rate=1e-4, threshold=0.6, cond=None):
         dataset = self.train_dataset
-        normalizer = self._get_normalizer(dataset)
-        self.model.lattice_normalizer = normalizer
-        self.model.prop_normalizer = self._get_prop_normalizer(dataset)
-        
+        if dataset is not None:
+            normalizer = self._get_normalizer(dataset)
+            self.model.lattice_normalizer = normalizer
+            self.model.prop_normalizer = self._get_prop_normalizer(dataset)
+
         num_atoms_list, atom_types_list, lengths_list, angles_list, frac_coords_list = [], [], [], [], []
         prop_list = []
         edge_index_list = []
@@ -387,9 +391,10 @@ class Runner():
 
     def recon(self, data_batch, num_gen, data_path, coord_num_langevin_steps=100, coord_step_rate=1e-4, threshold=0.6):
         dataset = self.train_dataset
-        normalizer = self._get_normalizer(dataset)
-        self.model.lattice_normalizer = normalizer
-        self.model.prop_normalizer = self._get_prop_normalizer(dataset)
+        if dataset is not None:
+            normalizer = self._get_normalizer(dataset)
+            self.model.lattice_normalizer = normalizer
+            self.model.prop_normalizer = self._get_prop_normalizer(dataset)
 
 
         num_atoms_list, atom_types_list, lengths_list, angles_list, frac_coords_list = [], [], [], [], []
