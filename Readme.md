@@ -32,6 +32,10 @@ A generate example:
 ~~~shell
 python generate1.py --dataset LatticeModulus --cond_path ys.csv --num_gen 1 --use_gpu true --save_mat_path generated_mat/test --vis_save_root ./vis/
 ~~~
+Or you can revise the parameters and run "sh_generate.sh" for generation:
+~~~shell
+sh sh_generate.sh
+~~~shell
 
 
 
