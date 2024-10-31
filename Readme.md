@@ -35,7 +35,7 @@ python generate1.py --dataset LatticeModulus --cond_path ys.csv --num_gen 1 --us
 Or you can revise the parameters and run "sh_generate.sh" for generation:
 ~~~shell
 sh sh_generate.sh
-~~~shell
+~~~
 
 
 
