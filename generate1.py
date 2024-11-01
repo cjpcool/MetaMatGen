@@ -93,8 +93,12 @@ if __name__ == '__main__':
     # print('finished saving y')
     if args.cond_path is not None:
         ys = np.loadtxt(args.cond_path, delimiter=',')
-        assert ys.shape[0] >= num_gen, 'Number of condition raws should be equal to num_gen.'
-        ys = ys[:num_gen]
+        assert ys.shape[0] == 1 or ys.shape[0] >= num_gen, 'Number of condition raws should be equal to num_gen or 1.'
+        if ys.shape[0] == 1:
+            ys = np.repeat(ys, num_gen, axis=0)
+        else:
+            ys = ys[:num_gen]
+
     else:
         print('loading data...')
         runner.load_data(data_path, args.dataset, file_name='data_node_num32')
