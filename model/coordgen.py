@@ -271,15 +271,15 @@ class CoordGen(torch.nn.Module):
         for t in tqdm(range(num_gen_steps, 0, -1), desc='Denoising'):
             #current_alpha = step_rate * (sigmas[t] / sigmas[1]) ** 2 #ini
             #current_alpha = step_rate
-            current_alpha = 0.00000008*(sigmas[t] / sigmas[1])**2
+            current_alpha = 0.00000006*(sigmas[t] / sigmas[1])**2
             for _ in range(num_langevin_steps):
                 scores_per_node_pos = self.predict_pos_score(latents, num_atoms, atom_types, lengths, angles, cart_coords, batch, sigmas[t], threshold=threshold,latent_prop=latent_prop, edge_index=edge_index, to_jimages=to_jimages, num_bonds=num_bonds, cond=cond)
                 #print('adfjkahsdfkj')
                 #print(current_alpha)
                 #print(scores_per_node_pos)
                 #input()
-                #cart_coords += current_alpha * scores_per_node_pos + (2 * current_alpha).sqrt() * (coord_temp * torch.randn_like(cart_coords))
-                cart_coords += current_alpha * scores_per_node_pos
+                cart_coords += current_alpha * scores_per_node_pos + (10 * current_alpha).sqrt() * (coord_temp * torch.randn_like(cart_coords))
+                #cart_coords += current_alpha * scores_per_node_pos
                 #cart_coords += current_alpha * scores_per_node_pos + (2 * current_alpha).sqrt() * (coord_temp * torch.randn_like(cart_coords))
                 #cart_coords = correct_cart_coords(cart_coords, lengths, angles, num_atoms, batch)
                 
